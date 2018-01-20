@@ -1,0 +1,20 @@
+# Build artifacts
+*.class
+*.jar
+*.mf
+*.MF
+
+# Runtime artifacts
+*.log
+**/logs
+
+# IDE/project artifacts
+*.classpath
+*.metadata
+*.settings
+*.project
+**/libs
+
+# Assignment files
+*.tgz
+*.pdf
