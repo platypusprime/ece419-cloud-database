@@ -5,12 +5,13 @@ import app_kvServer.cache.KVCacheManager;
 import app_kvServer.cache.LfuCacheManager;
 import app_kvServer.cache.LruCacheManager;
 import app_kvServer.cache.NoCacheManager;
+import app_kvServer.persistence.KVPersistenceManager;
 
 public class KVServer implements IKVServer {
 
 	private final int port;
 	private final KVCacheManager cacheManager;
-	// TODO private final KVStorageManager storageManager;
+	private final KVPersistenceManager persistenceManager;
 
 	/**
 	 * Start KV Server at given port
@@ -24,6 +25,12 @@ public class KVServer implements IKVServer {
 	 */
 	public KVServer(int port, int cacheSize, String strategy) {
 		this.port = port;
+		// TODO set up communications
+
+		// set up storage
+		persistenceManager = null; // TODO new AsyncPersistenceManager();
+
+		// set up cache
 		switch (strategy) {
 		case "FIFO":
 			cacheManager = new FifoCacheManager();
@@ -38,6 +45,8 @@ public class KVServer implements IKVServer {
 			cacheManager = new NoCacheManager();
 			break;
 		}
+		
+		cacheManager.setPersistenceManager(persistenceManager);
 	}
 
 	@Override
@@ -63,8 +72,7 @@ public class KVServer implements IKVServer {
 
 	@Override
 	public boolean inStorage(String key) {
-		// TODO Auto-generated method stub
-		return false;
+		return persistenceManager.containsKey(key);
 	}
 
 	@Override
@@ -89,7 +97,7 @@ public class KVServer implements IKVServer {
 
 	@Override
 	public void clearStorage() {
-		// TODO Auto-generated method stub
+		persistenceManager.clear();
 	}
 
 	@Override

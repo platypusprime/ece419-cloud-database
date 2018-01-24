@@ -2,10 +2,18 @@ package app_kvServer.cache;
 
 import java.util.Map;
 
+import app_kvServer.persistence.KVPersistenceManager;
+
 public abstract class AbstractCacheManager implements KVCacheManager {
 
 	private int size;
 	private Map<String, String> data;
+	private KVPersistenceManager persistenceManager;
+
+	@Override
+	public void setPersistenceManager(KVPersistenceManager persistenceManager) {
+		this.persistenceManager = persistenceManager;
+	}
 
 	@Override
 	public void setCacheSize(int size) {
@@ -32,8 +40,8 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 			return data.get(key);
 
 		} else {
-			String val = ""; // TODO query underlying persistence
-			updateCache(key, val);
+			String val = persistenceManager.get(key);
+			if (val != null) updateCache(key, val);
 			return val;
 		}
 	}
@@ -55,7 +63,7 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 			updateCache(key, value);
 		}
 
-		// TODO update underlying persistence
+		persistenceManager.put(key, value);
 		return oldVal;
 	}
 
@@ -72,7 +80,7 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 	public void clear() {
 		data.clear();
 	}
-	
+
 	protected abstract void registerUsage(String key);
 
 	protected abstract Map.Entry<String, String> evict();

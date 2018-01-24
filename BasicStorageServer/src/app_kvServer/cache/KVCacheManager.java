@@ -1,10 +1,13 @@
 package app_kvServer.cache;
 
 import app_kvServer.IKVServer.CacheStrategy;
+import app_kvServer.persistence.KVPersistenceManager;
 
 public interface KVCacheManager {
 
 	public CacheStrategy getCacheStrategy();
+
+	public void setPersistenceManager(KVPersistenceManager persistenceManager);
 
 	public void setCacheSize(int size);
 
