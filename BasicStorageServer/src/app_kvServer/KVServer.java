@@ -1,85 +1,104 @@
 package app_kvServer;
 
+import app_kvServer.cache.FifoCacheManager;
+import app_kvServer.cache.KVCacheManager;
+import app_kvServer.cache.LfuCacheManager;
+import app_kvServer.cache.LruCacheManager;
+import app_kvServer.cache.NoCacheManager;
+
 public class KVServer implements IKVServer {
+
+	private final int port;
+	private final KVCacheManager cacheManager;
+	// TODO private final KVStorageManager storageManager;
 
 	/**
 	 * Start KV Server at given port
+	 * 
 	 * @param port given port for storage server to operate
-	 * @param cacheSize specifies how many key-value pairs the server is allowed
-	 *           to keep in-memory
-	 * @param strategy specifies the cache replacement strategy in case the cache
-	 *           is full and there is a GET- or PUT-request on a key that is
-	 *           currently not contained in the cache. Options are "FIFO", "LRU",
-	 *           and "LFU".
+	 * @param cacheSize specifies how many key-value pairs the server is allowed to
+	 *            keep in-memory
+	 * @param strategy specifies the cache replacement strategy in case the cache is
+	 *            full and there is a GET- or PUT-request on a key that is currently
+	 *            not contained in the cache. Options are "FIFO", "LRU", and "LFU".
 	 */
 	public KVServer(int port, int cacheSize, String strategy) {
-		// TODO Auto-generated method stub
+		this.port = port;
+		switch (strategy) {
+		case "FIFO":
+			cacheManager = new FifoCacheManager();
+			break;
+		case "LRU":
+			cacheManager = new LruCacheManager();
+			break;
+		case "LFU":
+			cacheManager = new LfuCacheManager();
+			break;
+		default:
+			cacheManager = new NoCacheManager();
+			break;
+		}
 	}
 
 	@Override
-	public int getPort(){
-		// TODO Auto-generated method stub
-		return -1;
+	public int getPort() {
+		return port;
 	}
 
 	@Override
-    public String getHostname(){
+	public String getHostname() {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
-    public CacheStrategy getCacheStrategy(){
-		// TODO Auto-generated method stub
-		return IKVServer.CacheStrategy.None;
+	public CacheStrategy getCacheStrategy() {
+		return cacheManager.getCacheStrategy();
 	}
 
 	@Override
-    public int getCacheSize(){
-		// TODO Auto-generated method stub
-		return -1;
+	public int getCacheSize() {
+		return cacheManager.getCacheSize();
 	}
 
 	@Override
-    public boolean inStorage(String key){
+	public boolean inStorage(String key) {
 		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
-    public boolean inCache(String key){
-		// TODO Auto-generated method stub
-		return false;
+	public boolean inCache(String key) {
+		return cacheManager.containsKey(key);
 	}
 
 	@Override
-    public String getKV(String key) throws Exception{
-		// TODO Auto-generated method stub
-		return "";
+	public String getKV(String key) throws Exception {
+		return cacheManager.get(key);
 	}
 
 	@Override
-    public void putKV(String key, String value) throws Exception{
-		// TODO Auto-generated method stub
+	public void putKV(String key, String value) throws Exception {
+		cacheManager.put(key, value);
 	}
 
 	@Override
-    public void clearCache(){
-		// TODO Auto-generated method stub
+	public void clearCache() {
+		cacheManager.clear();
 	}
 
 	@Override
-    public void clearStorage(){
+	public void clearStorage() {
 		// TODO Auto-generated method stub
 	}
 
 	@Override
-    public void kill(){
-		// TODO Auto-generated method stub
+	public void kill() {
+		System.exit(1);
 	}
 
 	@Override
-    public void close(){
+	public void close() {
 		// TODO Auto-generated method stub
 	}
 }
