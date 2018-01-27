@@ -5,6 +5,7 @@ import app_kvServer.cache.KVCacheManager;
 import app_kvServer.cache.LfuCacheManager;
 import app_kvServer.cache.LruCacheManager;
 import app_kvServer.cache.NoCacheManager;
+import app_kvServer.persistence.FilePersistenceManager;
 import app_kvServer.persistence.KVPersistenceManager;
 
 import java.net.InetAddress;
@@ -14,8 +15,6 @@ import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.io.IOException;
-
-import logging.LogSetup;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -39,11 +38,12 @@ public class KVServer implements IKVServer {
 	 *            not contained in the cache. Options are "FIFO", "LRU", and "LFU".
 	 */
 	public KVServer(int port, int cacheSize, String strategy) {
+		
 		this.port = port;
 		// TODO set up communications
 		running = initializeServer();
 		// set up storage
-		persistenceManager = new KVPersistenceManager(); // TODO new AsyncPersistenceManager();
+		persistenceManager = new FilePersistenceManager();
 
 		// set up cache
 		switch (strategy) {

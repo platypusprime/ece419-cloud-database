@@ -1,40 +1,42 @@
 package app_kvServer.persistence;
 
-import java.io.*;
+/**
+ * Provides the basic contract for classes which manipulate key-value based
+ * persistences.
+ */
+public interface KVPersistenceManager {
 
-public class KVPersistenceManager implements IKVPersistenceManager{
-
-	private BufferedReader rfp;
-	private FileOutputStream wfp;
-
-	public KVPersistenceManager(){
-		// filereader
-		File file = new File("kv.txt");
-		rfp = new BufferedReader(new FileReader(file));
-		rfp.mark(file.length());
-		// filewriter
-		wfp = new FileOutputStream("kv.txt");
-	}
+	/**
+	 * Checks whether the persistence contains the given key.
+	 * 
+	 * @param key The key to check
+	 * @return <code>true</code> if the persistence contains an entry for the key,
+	 *         <code>false</code> otherwise
+	 */
 	public boolean containsKey(String key);
 
-	public String get(String key){
-		String line;
-		String[] items;
-		while ((line = rfp.readLine()) != null) {
-			items = line.trim().split(":");
-			if(items[0].equals(key)){
-				rfp.reset();
-				return items[1];
-				// TODO:return in KVMessage format??
-			}
-		}
-	};
+	/**
+	 * Retrieves the value associated with the given key from the persistence.
+	 * 
+	 * @param key The key to retrieve the value for
+	 * @return The value associated with the key, or <code>null</code> if no such
+	 *         value exists
+	 */
+	public String get(String key);
 
-	public String put(String key, String value){
-		// add code for updating kv pair
-		wfp.write(key + ":" + value);
-	};
+	/**
+	 * Inserts or updates the given key-value pair in the persistence.
+	 * 
+	 * @param key The key to set
+	 * @param value The corresponding value to set
+	 * @return The previous value associated with the given key, or
+	 *         <code>null</code> if no such entry existed
+	 */
+	public String put(String key, String value);
 
+	/**
+	 * Removes all key-value pairs from the persistence.
+	 */
 	public void clear();
 
 }
