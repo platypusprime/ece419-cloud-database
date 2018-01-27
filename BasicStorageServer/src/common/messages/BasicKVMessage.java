@@ -11,7 +11,7 @@ public class BasicKVMessage implements SerializableKVMessage {
 		this.value = value;
 		this.status = status;
 	}
-	
+
 	public BasicKVMessage(String stringMessage) {
 		String[] tokens = stringMessage.split(",");
 		this.key = tokens[1].replace("KEY:", "");

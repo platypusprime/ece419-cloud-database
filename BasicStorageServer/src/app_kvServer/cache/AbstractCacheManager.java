@@ -38,7 +38,6 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 		if (containsKey(key)) {
 			registerUsage(key);
 			return data.get(key);
-
 		} else {
 			String val = persistenceManager.get(key);
 			if (val != null) updateCache(key, val);
@@ -62,7 +61,7 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 		} else {
 			updateCache(key, value);
 		}
-
+		// TODO:return status for persistenceManager as well
 		persistenceManager.put(key, value);
 		return oldVal;
 	}
