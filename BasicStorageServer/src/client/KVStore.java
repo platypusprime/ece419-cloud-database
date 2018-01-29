@@ -16,6 +16,9 @@ public class KVStore implements KVCommInterface {
 
 	private static final Logger log = Logger.getLogger(KVStore.class);
 
+	private static final int MAX_KEY_LENGTH = 20;
+	private static final int MAX_VALUE_LENGTH = 120000;
+
 	private Socket clientSocket;
 	private OutputStream out;
 	private InputStream in;
@@ -67,6 +70,13 @@ public class KVStore implements KVCommInterface {
 	public KVMessage put(String key, String value) throws Exception {
 		if (clientSocket == null) {
 			throw new IllegalArgumentException("Not currently connected to server");
+
+		} else if (key == null || key.isEmpty() || key.length() > MAX_KEY_LENGTH
+				|| key.trim().contains(" ") || key.trim().contains("\n")) {
+			throw new IllegalArgumentException("Illegal <key> value");
+
+		} else if (value.length() > MAX_VALUE_LENGTH || value.trim().contains("\n")) {
+			throw new IllegalArgumentException("Illegal <value> value");
 		}
 
 		SerializableKVMessage putMessage = new BasicKVMessage(key, value, StatusType.PUT);
@@ -79,6 +89,11 @@ public class KVStore implements KVCommInterface {
 	public KVMessage get(String key) throws Exception {
 		if (clientSocket == null) {
 			throw new IllegalArgumentException("Not currently connected to server");
+
+		} else if (key == null || key.isEmpty() || key.length() > MAX_KEY_LENGTH
+				|| key.trim().contains(" ") || key.trim().contains("\n")) {
+			throw new IllegalArgumentException("Illegal <key> value");
+
 		}
 
 		SerializableKVMessage getMessage = new BasicKVMessage(key, null, StatusType.GET);

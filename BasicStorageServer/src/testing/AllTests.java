@@ -14,7 +14,9 @@ public class AllTests {
 	static {
 		try {
 			LogSetup.initialize("logs/testing/test.log", Level.ERROR);
-			new KVServer(50000, 10, "FIFO");
+			KVServer server = new KVServer(50000, 10, "FIFO");
+			server.clearCache();
+			server.clearStorage();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -24,7 +26,8 @@ public class AllTests {
 		TestSuite clientSuite = new TestSuite("Basic Storage ServerTest-Suite");
 		clientSuite.addTestSuite(ConnectionTest.class);
 		clientSuite.addTestSuite(InteractionTest.class);
-		clientSuite.addTestSuite(AdditionalTest.class);
+		clientSuite.addTestSuite(CacheTest.class);
+		clientSuite.addTestSuite(IllegalArgumentTest.class);
 		return clientSuite;
 	}
 
