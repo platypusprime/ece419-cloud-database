@@ -1,5 +1,17 @@
 package app_kvServer;
 
+import java.io.IOException;
+import java.net.BindException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
 import app_kvServer.cache.FifoCacheManager;
 import app_kvServer.cache.KVCacheManager;
 import app_kvServer.cache.LfuCacheManager;
@@ -7,26 +19,22 @@ import app_kvServer.cache.LruCacheManager;
 import app_kvServer.cache.NoCacheManager;
 import app_kvServer.persistence.FilePersistenceManager;
 import app_kvServer.persistence.KVPersistenceManager;
+import logger.LogSetup;
 
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+public class KVServer implements IKVServer, Runnable {
 
-import java.net.BindException;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.io.IOException;
+	private static final Logger log = Logger.getLogger(KVServer.class);
 
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-public class KVServer implements IKVServer {
+	private static final String CONSOLE_PATTERN = "KVServer> %m%n";
 
 	private final int port;
 	private final KVCacheManager cacheManager;
 	private final KVPersistenceManager persistenceManager;
 
-	private static Logger logger = Logger.getRootLogger();
 	private ServerSocket serverSocket;
-	private boolean running;
+	private List<ClientConnection> clients = new ArrayList<>();
+	private boolean isRunning;
+
 	/**
 	 * Start KV Server at given port
 	 * 
@@ -38,13 +46,6 @@ public class KVServer implements IKVServer {
 	 *            not contained in the cache. Options are "FIFO", "LRU", and "LFU".
 	 */
 	public KVServer(int port, int cacheSize, String strategy) {
-		
-		this.port = port;
-		// TODO set up communications
-		running = initializeServer();
-		// set up storage
-		persistenceManager = new FilePersistenceManager();
-
 		// set up cache
 		switch (strategy) {
 		case "FIFO":
@@ -60,50 +61,74 @@ public class KVServer implements IKVServer {
 			cacheManager = new NoCacheManager();
 			break;
 		}
-		
+
+		// set up storage
+		persistenceManager = new FilePersistenceManager();
 		cacheManager.setPersistenceManager(persistenceManager);
+		cacheManager.setCacheSize(cacheSize);
+
+		log.info("Created KVServer with "
+				+ "port=" + port + ", "
+				+ "cacheSize=" + cacheSize + ", "
+				+ "strategy=" + strategy);
+
+		this.port = port;
+
+		new Thread(this).start();
+	}
+
+	@Override
+	public void run() {
+		isRunning = initializeServer();
 
 		// Main accept loop
-		if(serverSocket != null) {
-			while(isRunning()){
-				try {
-					Socket client = serverSocket.accept();
-					ClientConnection connection =
-							new ClientConnection(client);
-					new Thread(connection).start();
+		while (serverSocket != null && isRunning()) {
+			try {
+				log.info("Listening for client connections...");
+				Socket clientSocket = serverSocket.accept();
+				ClientConnection connection = new ClientConnection(clientSocket, this);
+				clients.add(connection);
+				new Thread(connection).start();
 
-					logger.info("Connected to "
-							+ client.getInetAddress().getHostName()
-							+  " on port " + client.getPort());
-				} catch (IOException e) {
-					logger.error("Error! " +
-							"Unable to establish connection. \n", e);
-				}
+				log.info("Connected to "
+						+ clientSocket.getInetAddress().getHostName()
+						+ " on port " + clientSocket.getPort());
+			} catch (IOException e) {
+				log.error("Error! " + "Unable to establish connection. \n", e);
 			}
 		}
-		logger.info("Server stopped.");
+
+		// shut down client connections
+		for (ClientConnection client : clients) {
+			try {
+				client.close();
+			} catch (IOException e) {
+				log.error("Error! " + "Unable to close client connection. \n", e);
+			}
+		}
+
+		log.info("Server stopped.");
 	}
 
 	private boolean isRunning() {
-		return this.running;
+		return this.isRunning;
 	}
 
 	private boolean initializeServer() {
-		logger.info("Initialize server ...");
+		log.info("initializing server on " + getHostname());
 		try {
 			serverSocket = new ServerSocket(port);
-			logger.info("Server listening on port: "
-					+ serverSocket.getLocalPort());
+			log.info("Server listening on port: " + serverSocket.getLocalPort());
 			return true;
 
+		} catch (BindException e) {
+			log.error("Port " + port + " is already bound");
 		} catch (IOException e) {
-			logger.error("Error! Cannot open server socket:");
-			if(e instanceof BindException){
-				logger.error("Port " + port + " is already bound!");
-			}
-			return false;
+			log.error("Cannot open server socket");
 		}
+		return false;
 	}
+
 	@Override
 	public int getPort() {
 		return port;
@@ -111,9 +136,16 @@ public class KVServer implements IKVServer {
 
 	@Override
 	public String getHostname() {
-		ip = InetAddress.getLocalHost();
-		hostname = ip.getHostName();
-		return hostname;
+		try {
+			InetAddress ip = InetAddress.getLocalHost();
+			String hostname = ip.getHostName();
+			return hostname;
+		} catch (UnknownHostException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		return null;
 	}
 
 	@Override
@@ -158,35 +190,46 @@ public class KVServer implements IKVServer {
 
 	@Override
 	public void kill() {
-		System.exit(1);
+		System.exit(1); // immediately shutdown the JVM
 	}
 
 	@Override
 	public void close() {
+		// trigger run()'s epilogue
+		isRunning = false;
+		try {
+			serverSocket.close();
+		} catch (IOException e) {
+			log.error("Error! " + "Unable to close server socket. \n", e);
+		}
 	}
 
-	// NOT SURE IF MAIN IS NEEDED
 	/**
 	 * Main entry point for the echo server application.
-	 * @param args contains the port number at args[0].
+	 * 
+	 * @param args contains the port number at args[0], cache size at args[1], and
+	 *            cache strategy at args[2].
 	 */
 	public static void main(String[] args) {
 		try {
-			new LogSetup("logs/server.log", Level.ALL);
-			if(args.length != 1) {
+			LogSetup.initialize("logs/server.log", Level.INFO, CONSOLE_PATTERN);
+			if (args.length != 3) {
 				System.out.println("Error! Invalid number of arguments!");
-				System.out.println("Usage: Server <port>!");
+				System.out.println("Usage: KVServer <port> <cacheSize> <strategy>");
 			} else {
 				int port = Integer.parseInt(args[0]);
-				new Server(port).start();
+				int cacheSize = Integer.parseInt(args[1]);
+				String strategy = args[2];
+				new KVServer(port, cacheSize, strategy);
 			}
 		} catch (IOException e) {
 			System.out.println("Error! Unable to initialize logger!");
 			e.printStackTrace();
 			System.exit(1);
+
 		} catch (NumberFormatException nfe) {
 			System.out.println("Error! Invalid argument <port>! Not a number!");
-			System.out.println("Usage: Server <port>!");
+			System.out.println("Usage: Server <port> <cache size> <cache strategy>");
 			System.exit(1);
 		}
 	}

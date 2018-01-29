@@ -1,11 +1,8 @@
 package client;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
-import java.io.Reader;
-import java.io.Writer;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Socket;
 
 import org.apache.log4j.Logger;
@@ -17,11 +14,11 @@ import common.messages.SerializableKVMessage;
 
 public class KVStore implements KVCommInterface {
 
-	private Logger logger = Logger.getRootLogger();
-	// private Set<ClientSocketListener> listeners;
-	private boolean running;
+	private static final Logger log = Logger.getLogger(KVStore.class);
 
 	private Socket clientSocket;
+	private OutputStream out;
+	private InputStream in;
 
 	private final String address;
 	private final int port;
@@ -40,32 +37,29 @@ public class KVStore implements KVCommInterface {
 	@Override
 	public void connect() throws Exception {
 		clientSocket = new Socket(address, port);
-		// listeners = new HashSet<ClientSocketListener>();
-		setRunning(true);
-		logger.info("Connection established");
+		out = clientSocket.getOutputStream();
+		in = clientSocket.getInputStream();
+
+		log.info("Connection established");
 	}
 
 	@Override
 	public void disconnect() {
-		logger.info("try to close connection ...");
+		log.info("try to close connection ...");
 
 		try {
 			tearDownConnection();
-			// for (ClientSocketListener listener : listeners) {
-			// listener.handleStatus(SocketStatus.DISCONNECTED);
-			// }
 		} catch (IOException ioe) {
-			logger.error("Unable to close connection!");
+			log.error("Unable to close connection!");
 		}
 	}
 
 	private void tearDownConnection() throws IOException {
-		setRunning(false);
-		logger.info("tearing down the connection ...");
+		log.info("tearing down the connection ...");
 		if (clientSocket != null) {
 			clientSocket.close();
 			clientSocket = null;
-			logger.info("connection closed!");
+			log.info("connection closed!");
 		}
 	}
 
@@ -75,22 +69,10 @@ public class KVStore implements KVCommInterface {
 			throw new IllegalArgumentException("Not currently connected to server");
 		}
 
-		SerializableKVMessage getMessage = new BasicKVMessage(key, null, StatusType.GET);
-		String getMessageStr = getMessage.toMessageString();
+		SerializableKVMessage putMessage = new BasicKVMessage(key, value, StatusType.PUT);
+		BasicKVMessage.sendMessage(out, putMessage);
 
-		// open stream
-		try (Writer writer = new OutputStreamWriter(clientSocket.getOutputStream());
-				Reader streamReader = new InputStreamReader(clientSocket.getInputStream());
-				BufferedReader reader = new BufferedReader(streamReader)) {
-			writer.write(getMessageStr);
-			writer.flush();
-			// TODO log message
-
-			String ln = reader.readLine();
-			return new BasicKVMessage(ln);
-		} catch (IOException e) {
-			throw new IOException("IOException when processing message", e);
-		}
+		return BasicKVMessage.receiveMessage(in);
 	}
 
 	@Override
@@ -100,28 +82,10 @@ public class KVStore implements KVCommInterface {
 		}
 
 		SerializableKVMessage getMessage = new BasicKVMessage(key, null, StatusType.GET);
-		String getMessageStr = getMessage.toMessageString();
+		BasicKVMessage.sendMessage(out, getMessage);
 
-		// open stream
-		try (Writer writer = new OutputStreamWriter(clientSocket.getOutputStream());
-				Reader streamReader = new InputStreamReader(clientSocket.getInputStream());
-				BufferedReader reader = new BufferedReader(streamReader)) {
-			writer.write(getMessageStr);
-			writer.flush();
-			// TODO log message
+		return BasicKVMessage.receiveMessage(in);
 
-			String ln = reader.readLine();
-			return new BasicKVMessage(ln);
-		} catch (IOException e) {
-			throw new IOException("IOException when processing message", e);
-		}
 	}
 
-	public boolean isRunning() {
-		return running;
-	}
-
-	public void setRunning(boolean running) {
-		this.running = running;
-	}
 }
