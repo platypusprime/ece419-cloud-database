@@ -28,12 +28,12 @@ public class LfuCacheManager extends AbstractCacheManager {
 	protected void registerUsage(String key) {
 		if (usages.containsKey(key)) {
 			int oldUsages = usages.get(key);
-			usages.put(key, oldUsages++);
+			usages.put(key, oldUsages + 1);
 
 		} else {
 			usages.put(key, 1);
 		}
-		
+
 		log.debug("Recorded usage for key: " + key);
 	}
 
