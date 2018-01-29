@@ -5,12 +5,20 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.log4j.Logger;
+
 import app_kvServer.IKVServer.CacheStrategy;
 
 public class LfuCacheManager extends AbstractCacheManager {
 
+	private static Logger log = Logger.getLogger(KVCacheManager.class);
+	
 	private Map<String, Integer> usages = new HashMap<String, Integer>();
 
+	public LfuCacheManager() {
+		log.info("Created LFU cache manager");
+	}
+	
 	@Override
 	public CacheStrategy getCacheStrategy() {
 		return CacheStrategy.LFU;
@@ -25,6 +33,8 @@ public class LfuCacheManager extends AbstractCacheManager {
 		} else {
 			usages.put(key, 1);
 		}
+		
+		log.debug("Recorded usage for key: " + key);
 	}
 
 	@Override
@@ -36,6 +46,9 @@ public class LfuCacheManager extends AbstractCacheManager {
 
 		usages.remove(lfuKey);
 		String value = removeKey(lfuKey);
+		
+		log.debug("Evicted least frequently used key: " + lfuKey);
+		
 		return new AbstractMap.SimpleEntry<>(lfuKey, value);
 	}
 

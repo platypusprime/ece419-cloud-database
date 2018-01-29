@@ -1,13 +1,18 @@
 package app_kvServer.cache;
 
+import java.util.HashMap;
 import java.util.Map;
+
+import org.apache.log4j.Logger;
 
 import app_kvServer.persistence.KVPersistenceManager;
 
 public abstract class AbstractCacheManager implements KVCacheManager {
 
+	private static Logger log = Logger.getLogger(KVCacheManager.class);
+
 	private int size;
-	private Map<String, String> data;
+	private Map<String, String> data = new HashMap<>();
 	private KVPersistenceManager persistenceManager;
 
 	@Override
@@ -29,15 +34,20 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 	}
 
 	@Override
-	public boolean containsKey(String key) {
+	public synchronized boolean containsKey(String key) {
 		return data.containsKey(key);
 	}
 
 	@Override
-	public String get(String key) {
+	public synchronized String get(String key) {
+		log.info("Looking up key '" + key + "' in cache...");
+
 		if (containsKey(key)) {
 			registerUsage(key);
-			return data.get(key);
+			String value = data.get(key);
+			log.info("Value found in cache for key '" + key + "': '" + value + "'");
+			return value;
+
 		} else {
 			String val = persistenceManager.get(key);
 			if (val != null) updateCache(key, val);
@@ -46,12 +56,12 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 	}
 
 	@Override
-	public String getQuietly(String key) {
-		return data.get(key);
-	}
-
-	@Override
-	public String put(String key, String value) {
+	public synchronized String put(String key, String value) {
+		if (value == null) {
+			persistenceManager.put(key, value);
+			return removeKey(key);
+		}
+		
 		String oldVal = null;
 
 		if (containsKey(key)) {
@@ -61,7 +71,7 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 		} else {
 			updateCache(key, value);
 		}
-		// TODO:return status for persistenceManager as well
+
 		persistenceManager.put(key, value);
 		return oldVal;
 	}
@@ -77,6 +87,7 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 
 	@Override
 	public void clear() {
+		log.info("Clearing cache");
 		data.clear();
 	}
 

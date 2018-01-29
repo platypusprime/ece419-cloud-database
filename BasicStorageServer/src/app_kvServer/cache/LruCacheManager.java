@@ -5,17 +5,25 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.Map.Entry;
 
+import org.apache.log4j.Logger;
+
 import app_kvServer.IKVServer.CacheStrategy;
 
 import java.util.Set;
 
 public class LruCacheManager extends AbstractCacheManager {
 
+	private static Logger log = Logger.getLogger(KVCacheManager.class);
+	
 	private Set<String> keys = new LinkedHashSet<>();
 
+	public LruCacheManager() {
+		log.info("Created LRU cache manager");
+	}
+	
 	@Override
 	public CacheStrategy getCacheStrategy() {
-		return CacheStrategy.LFU;
+		return CacheStrategy.LRU;
 	}
 
 	@Override
@@ -25,17 +33,22 @@ public class LruCacheManager extends AbstractCacheManager {
 		}
 
 		keys.add(key);
+		
+		log.info("Recorded usage for key: " + key);
 	}
 
 	@Override
 	protected Entry<String, String> evict() {
 		Iterator<String> iterator = keys.iterator();
 		if (iterator.hasNext()) {
-			String oldestKey = iterator.next();
+			String lruKey = iterator.next();
 
-			keys.remove(oldestKey);
-			String value = removeKey(oldestKey);
-			return new AbstractMap.SimpleEntry<>(oldestKey, value);
+			keys.remove(lruKey);
+			String value = removeKey(lruKey);
+			
+			log.debug("Evicted least recently used key: " + lruKey);
+			
+			return new AbstractMap.SimpleEntry<>(lruKey, value);
 		}
 
 		return null;
