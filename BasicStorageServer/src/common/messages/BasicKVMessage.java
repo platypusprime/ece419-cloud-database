@@ -6,6 +6,10 @@ import java.io.OutputStream;
 
 import org.apache.log4j.Logger;
 
+/**
+ * A naive implementation of a message which contains key, value, and status
+ * information. Contains marshalling and unmarshalling functions.
+ */
 public class BasicKVMessage implements SerializableKVMessage {
 
 	private static final Logger log = Logger.getLogger(BasicKVMessage.class);
@@ -17,12 +21,27 @@ public class BasicKVMessage implements SerializableKVMessage {
 	private final String value;
 	private final StatusType status;
 
+	/**
+	 * Creates a KV message with the specified key, value and status. Any of these
+	 * values can be <code>null</code>.
+	 * 
+	 * @param key The key to set
+	 * @param value The value to set
+	 * @param status The message status to set
+	 */
 	public BasicKVMessage(String key, String value, StatusType status) {
 		this.key = key;
 		this.value = value;
 		this.status = status;
 	}
 
+	/**
+	 * Statically reconstructs a message from its marshalled string form.
+	 * 
+	 * @param msgString The string representation of a marshalled KV message
+	 * @return The unmarshalled message, or <code>null</code>
+	 *         if no message could be constructed
+	 */
 	public static BasicKVMessage fromString(String msgString) {
 		String key = null, value = null;
 		StatusType status;
@@ -41,6 +60,15 @@ public class BasicKVMessage implements SerializableKVMessage {
 		return new BasicKVMessage(key, value, status);
 	}
 
+	/**
+	 * Statically reconstructs a message from its marshalled byte array form.
+	 * 
+	 * @param bytes A byte array containing a marshalled KV message with
+	 *            UTF-8 encoding
+	 * @return The unmarshalled message, or <code>null</code>
+	 *         if no message could be constructed
+	 * @throws IOException If an IO exception occurs while decoding the byte array
+	 */
 	public static BasicKVMessage fromBytes(byte[] bytes) throws IOException {
 		String msgString = new String(bytes, "UTF-8");
 		log.debug("Building KV message from bytes: " + msgString);
@@ -80,6 +108,16 @@ public class BasicKVMessage implements SerializableKVMessage {
 		return msgBuilder.append("\n").toString();
 	}
 
+	/**
+	 * Utility method that transmits a given message through the specified output
+	 * stream, using {@link BasicKVMessage#toMessageString() toMessageString()} to
+	 * marshal the message and UTF-8 to encode it.
+	 * 
+	 * @param out The stream on which to transmit the message
+	 * @param msg The message to transmit
+	 * @throws IOException If an IO exception occurs while encoding or
+	 *             transmitting the message
+	 */
 	public static void sendMessage(OutputStream out, SerializableKVMessage msg) throws IOException {
 		String msgStr = msg.toMessageString();
 		byte[] msgBytes = msgStr.getBytes("UTF-8");
@@ -89,7 +127,16 @@ public class BasicKVMessage implements SerializableKVMessage {
 		log.info("Sent message: '" + msgStr.trim() + "'");
 	}
 
-	public static SerializableKVMessage receiveMessage(InputStream in) throws IOException {
+	/**
+	 * Blocking call which waits for a full message to be transmitted from the
+	 * specified input stream and returns a parsed representation of it.
+	 * 
+	 * @param in The stream from which to receive the message
+	 * @return The received message, as a {@link KVMessage}
+	 * @throws IOException If the stream is closed before a full message could be
+	 *             received or if some other IO error occurs
+	 */
+	public static KVMessage receiveMessage(InputStream in) throws IOException {
 		log.debug("Waiting for message...");
 		
 		int index = 0;

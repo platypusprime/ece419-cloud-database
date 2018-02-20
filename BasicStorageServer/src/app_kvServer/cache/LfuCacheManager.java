@@ -9,12 +9,19 @@ import org.apache.log4j.Logger;
 
 import app_kvServer.IKVServer.CacheStrategy;
 
+/**
+ * A cache implementing the FIFO strategy. Keeps track of the usage frequency of
+ * keys and chooses the least frequently used key for eviction.
+ */
 public class LfuCacheManager extends AbstractCacheManager {
 
 	private static Logger log = Logger.getLogger(KVCacheManager.class);
 	
 	private Map<String, Integer> usages = new HashMap<String, Integer>();
 
+	/**
+	 * Creates a LFU cache with an initial capacity of 0.
+	 */
 	public LfuCacheManager() {
 		log.info("Created LFU cache manager");
 	}

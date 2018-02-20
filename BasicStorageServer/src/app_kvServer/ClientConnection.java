@@ -11,6 +11,11 @@ import common.messages.BasicKVMessage;
 import common.messages.KVMessage.StatusType;
 import common.messages.SerializableKVMessage;
 
+/**
+ * The class oversees a single server-side client connection session. When run
+ * on a thread, polls socket input stream for messages and processes them.
+ * Closes the socket and associated streams on thread termination.
+ */
 public class ClientConnection implements Runnable {
 
 	private static Logger log = Logger.getLogger(ClientConnection.class);
@@ -24,6 +29,7 @@ public class ClientConnection implements Runnable {
 	 * Constructs a new CientConnection object for a given TCP socket.
 	 * 
 	 * @param clientSocket the Socket object for the client connection.
+	 * @param server The object serving client requests
 	 */
 	public ClientConnection(Socket clientSocket, KVServer server) {
 		this.clientSocket = clientSocket;
@@ -117,7 +123,12 @@ public class ClientConnection implements Runnable {
 
 		}
 	}
-	
+
+	/**
+	 * Closes this connection, as well as associated sockets and streams.
+	 * 
+	 * @throws IOException If an exception occurs while closing the socket.
+	 */
 	public void close() throws IOException {
 		isOpen = false;
 		clientSocket.close();

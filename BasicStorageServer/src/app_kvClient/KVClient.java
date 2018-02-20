@@ -13,7 +13,29 @@ import common.messages.KVMessage;
 import logger.LogSetup;
 
 /**
- * Implements the command-line interface for the KV client application.
+ * Implements the command-line interface for the KV client application. Parses
+ * user input from standard input to form commands, which are delegated to an
+ * underlying {@link KVCommInterface}, which provides a level of abstraction
+ * between this class and the KV server. Prompts and messages are printed to the
+ * console using a Log4J console appender. The following commands are supported:
+ * 
+ * <ul>
+ * <li><b><code>connect &lt;address&gt; &lt;port&gt;</code></b> : Tries to
+ * establish a TCP connection to the storage server based on the given hostname
+ * and port number</li>
+ * <li><b><code>disconnect</code></b> : Tries to disconnect from the connected
+ * server</li>
+ * <li><b><code>put &lt;key&gt; &lt;value&gt;</code></b> : <i>Inserts</i> a
+ * key-value pair into the storage server data structures. <i>Updates</i>
+ * (overwrites) the current value with the given value if the server already
+ * contains the specified key. <i>Deletes</i> the entry for the given key if
+ * <code>&lt;value&gt;</code> equals null</li>
+ * <li><b><code>get &lt;key&gt;</code></b> : Retrieves the value for the given
+ * key from the storage server</li>
+ * <li><b><code>logLevel &lt;level&gt;</code></b> : Sets the logger to the
+ * specified log level</li>
+ * <li><b><code>help</code></b> : Displays the help message</li>
+ * </ul>
  */
 public class KVClient implements IKVClient {
 

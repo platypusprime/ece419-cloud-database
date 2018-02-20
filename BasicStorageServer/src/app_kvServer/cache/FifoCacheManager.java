@@ -11,12 +11,19 @@ import java.util.Set;
 
 import app_kvServer.IKVServer.CacheStrategy;
 
+/**
+ * A cache implementing the FIFO strategy. Keeps track of the insertion order of
+ * keys and chooses the oldest key for eviction.
+ */
 public class FifoCacheManager extends AbstractCacheManager {
 
 	private static Logger log = Logger.getLogger(KVCacheManager.class);
 
 	private Set<String> keys = new LinkedHashSet<>();
 
+	/**
+	 * Creates a FIFO cache with an initial capacity of 0.
+	 */
 	public FifoCacheManager() {
 		log.info("Created FIFO cache manager");
 	}

@@ -2,44 +2,49 @@ package client;
 
 import common.messages.KVMessage;
 
+/**
+ * Provides a high-level contract for communications with the KV server
+ * application.
+ * 
+ * @see KVStore
+ */
 public interface KVCommInterface {
 
 	/**
-	 * Establishes a connection to the KV Server.
+	 * Establishes a connection to the configured KV server. Does nothing if already
+	 * connected to a server.
 	 *
-	 * @throws Exception
-	 *             if connection could not be established.
+	 * @throws Exception If a connection could not be established
 	 */
 	public void connect() throws Exception;
 
 	/**
-	 * disconnects the client from the currently connected server.
+	 * Disconnects the client from the currently connected KV server. Does nothing
+	 * if not currently connected to a server.
 	 */
 	public void disconnect();
 
 	/**
-	 * Inserts a key-value pair into the KVServer.
+	 * Issues an insert, update, or delete request to the connected KV server.
 	 *
-	 * @param key
-	 *            the key that identifies the given value.
-	 * @param value
-	 *            the value that is indexed by the given key.
-	 * @return a message that confirms the insertion of the tuple or an error.
-	 * @throws Exception
-	 *             if put command cannot be executed (e.g. not connected to any
-	 *             KV server).
+	 * @param key The key to put a value for
+	 * @param value The value to associate with the given key. If empty or
+	 *            <code>null</code>, a deletion is requested instead.
+	 * @return The server response, which describes the result of the request and
+	 *         any errors that may have occurred
+	 * @throws Exception If the request could not be sent
+	 *             (e.g. not connected to a server).
 	 */
 	public KVMessage put(String key, String value) throws Exception;
 
 	/**
-	 * Retrieves the value for a given key from the KVServer.
+	 * Issues a retrieve request to the connected KV server.
 	 *
-	 * @param key
-	 *            the key that identifies the value.
+	 * @param key The key to retrieve the value for
 	 * @return the value, which is indexed by the given key.
-	 * @throws Exception
-	 *             if put command cannot be executed (e.g. not connected to any
-	 *             KV server).
+	 * @throws Exception If the request could not be sent
+	 *             (e.g. not connected to a server).
 	 */
 	public KVMessage get(String key) throws Exception;
+
 }

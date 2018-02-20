@@ -11,12 +11,20 @@ import app_kvServer.IKVServer.CacheStrategy;
 
 import java.util.Set;
 
+/**
+ * A cache implementing the LRU strategy. Keeps track of the insertion order of
+ * keys and treats usages as new insertions. Chooses the oldest key for
+ * eviction.
+ */
 public class LruCacheManager extends AbstractCacheManager {
 
 	private static Logger log = Logger.getLogger(KVCacheManager.class);
 	
 	private Set<String> keys = new LinkedHashSet<>();
 
+	/**
+	 * Creates a LRU cache with an initial capacity of 0.
+	 */
 	public LruCacheManager() {
 		log.info("Created LRU cache manager");
 	}

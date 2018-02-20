@@ -21,6 +21,10 @@ import app_kvServer.persistence.FilePersistenceManager;
 import app_kvServer.persistence.KVPersistenceManager;
 import logger.LogSetup;
 
+/**
+ * The implementation of server functionality defined in {@link IKVServer}.
+ * Contains an entry point for the server application.
+ */
 public class KVServer implements IKVServer, Runnable {
 
 	private static final Logger log = Logger.getLogger(KVServer.class);
@@ -36,7 +40,7 @@ public class KVServer implements IKVServer, Runnable {
 	private boolean isRunning;
 
 	/**
-	 * Start KV Server at given port
+	 * Creates and starts KV Server at given port.
 	 * 
 	 * @param port given port for storage server to operate
 	 * @param cacheSize specifies how many key-value pairs the server is allowed to

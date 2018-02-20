@@ -12,6 +12,9 @@ import common.messages.KVMessage;
 import common.messages.KVMessage.StatusType;
 import common.messages.SerializableKVMessage;
 
+/**
+ * Provides the implementation for the client-side communications module.
+ */
 public class KVStore implements KVCommInterface {
 
 	private static final Logger log = Logger.getLogger(KVStore.class);
