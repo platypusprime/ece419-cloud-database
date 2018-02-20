@@ -14,26 +14,21 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 
 	private static Logger log = Logger.getLogger(KVCacheManager.class);
 
-	private int size;
+	private int capacity = 0;
 	private Map<String, String> data = new HashMap<>();
-	private KVPersistenceManager persistenceManager;
 
 	@Override
-	public void setPersistenceManager(KVPersistenceManager persistenceManager) {
-		this.persistenceManager = persistenceManager;
-	}
-
-	@Override
-	public void setCacheSize(int size) {
-		this.size = size;
-		while (data.size() >= this.size) {
+	public void setCacheSize(int size) throws IllegalArgumentException {
+		if (size < 0) throw new IllegalArgumentException("Cannot set cache size to negative value");
+		this.capacity = size;
+		while (data.size() > this.capacity) {
 			evict();
 		}
 	}
 
 	@Override
 	public int getCacheSize() {
-		return size;
+		return capacity;
 	}
 
 	@Override
@@ -50,42 +45,39 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 			String value = data.get(key);
 			log.info("Value found in cache for key '" + key + "': '" + value + "'");
 			return value;
-
-		} else {
-			String val = persistenceManager.get(key);
-			if (val != null) updateCache(key, val);
-			return val;
 		}
+
+		return null;
 	}
 
 	@Override
 	public synchronized String put(String key, String value) {
 		if (value == null) {
-			persistenceManager.put(key, value);
 			return removeKey(key);
 		}
-		
+
 		String oldVal = null;
 
-		if (containsKey(key)) {
-			oldVal = data.put(key, value);
-			registerUsage(key);
-
-		} else {
-			updateCache(key, value);
-		}
-
-		persistenceManager.put(key, value);
-		return oldVal;
-	}
-
-	protected void updateCache(String key, String value) {
-		while (data.size() >= size) {
+		// make room for a new entry if cache is full
+		if (data.size() == this.capacity && !containsKey(key)) {
 			evict();
 		}
 
-		data.put(key, value);
+		oldVal = data.put(key, value);
 		registerUsage(key);
+
+		return oldVal;
+	}
+
+	/**
+	 * Removes the key-value entry associated with the specified key.
+	 * 
+	 * @param key The key to remove
+	 * @return The value previously associated with the key, or <code>null</code> if
+	 *         no such mapping existed
+	 */
+	protected String removeKey(String key) {
+		return data.remove(key);
 	}
 
 	@Override
@@ -109,14 +101,4 @@ public abstract class AbstractCacheManager implements KVCacheManager {
 	 */
 	protected abstract Map.Entry<String, String> evict();
 
-	/**
-	 * Removes the key-value entry associated with the specified key.
-	 * 
-	 * @param key The key to remove
-	 * @return The value previously associated with the key, or <code>null</code> if
-	 *         no such mapping existed
-	 */
-	protected String removeKey(String key) {
-		return data.remove(key);
-	}
 }

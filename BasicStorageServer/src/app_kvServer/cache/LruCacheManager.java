@@ -19,7 +19,7 @@ import java.util.Set;
 public class LruCacheManager extends AbstractCacheManager {
 
 	private static Logger log = Logger.getLogger(KVCacheManager.class);
-	
+
 	private Set<String> keys = new LinkedHashSet<>();
 
 	/**
@@ -28,7 +28,7 @@ public class LruCacheManager extends AbstractCacheManager {
 	public LruCacheManager() {
 		log.info("Created LRU cache manager");
 	}
-	
+
 	@Override
 	public CacheStrategy getCacheStrategy() {
 		return CacheStrategy.LRU;
@@ -41,7 +41,7 @@ public class LruCacheManager extends AbstractCacheManager {
 		}
 
 		keys.add(key);
-		
+
 		log.info("Recorded usage for key: " + key);
 	}
 
@@ -53,9 +53,9 @@ public class LruCacheManager extends AbstractCacheManager {
 
 			keys.remove(lruKey);
 			String value = removeKey(lruKey);
-			
+
 			log.debug("Evicted least recently used key: " + lruKey);
-			
+
 			return new AbstractMap.SimpleEntry<>(lruKey, value);
 		}
 
