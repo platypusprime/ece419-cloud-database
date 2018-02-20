@@ -1,9 +1,12 @@
 package app_kvServer.cache;
 
-import java.util.AbstractMap;
+import java.util.AbstractMap.SimpleEntry;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.SortedSet;
+import java.util.TreeSet;
 
 import org.apache.log4j.Logger;
 
@@ -16,16 +19,19 @@ import app_kvServer.IKVServer.CacheStrategy;
 public class LfuCacheManager extends AbstractCacheManager {
 
 	private static Logger log = Logger.getLogger(KVCacheManager.class);
-	
-	private Map<String, Integer> usages = new HashMap<String, Integer>();
+
+	private Map<String, FrequencyKeyPair> keys;
+	private SortedSet<FrequencyKeyPair> usages;
 
 	/**
 	 * Creates a LFU cache with an initial capacity of 0.
 	 */
 	public LfuCacheManager() {
+		usages = new TreeSet<>();
+		keys = new HashMap<>();
 		log.info("Created LFU cache manager");
 	}
-	
+
 	@Override
 	public CacheStrategy getCacheStrategy() {
 		return CacheStrategy.LFU;
@@ -33,12 +39,16 @@ public class LfuCacheManager extends AbstractCacheManager {
 
 	@Override
 	protected void registerUsage(String key) {
-		if (usages.containsKey(key)) {
-			int oldUsages = usages.get(key);
-			usages.put(key, oldUsages + 1);
-
+		if (keys.containsKey(key)) {
+			FrequencyKeyPair fkp = keys.get(key);
+			FrequencyKeyPair newFkp = fkp.incrementUsages();
+			keys.put(key, newFkp);
+			usages.remove(fkp);
+			usages.add(newFkp);
 		} else {
-			usages.put(key, 1);
+			FrequencyKeyPair fkp = new FrequencyKeyPair(key, 1);
+			keys.put(key, fkp);
+			usages.add(fkp);
 		}
 
 		log.debug("Recorded usage for key: " + key);
@@ -46,23 +56,61 @@ public class LfuCacheManager extends AbstractCacheManager {
 
 	@Override
 	protected Entry<String, String> evict() {
-		String lfuKey = usages.entrySet().stream()
-				.min((entry1, entry2) -> entry1.getValue().compareTo(entry2.getValue()))
-				.map(Map.Entry<String, Integer>::getKey)
-				.orElse(null);
+		Iterator<FrequencyKeyPair> iterator = usages.iterator();
+		if (iterator.hasNext()) {
+			FrequencyKeyPair lfuFkp = iterator.next();
+			String lfuKey = lfuFkp.key;
+			String lfuValue = removeKey(lfuKey);
+			usages.remove(lfuFkp);
+			keys.remove(lfuKey);
 
-		usages.remove(lfuKey);
-		String value = removeKey(lfuKey);
-		
-		log.debug("Evicted least frequently used key: " + lfuKey);
-		
-		return new AbstractMap.SimpleEntry<>(lfuKey, value);
+			return new SimpleEntry<>(lfuKey, lfuValue);
+
+		} else {
+			return null;
+		}
 	}
 
 	@Override
 	public void clear() {
 		super.clear();
 		usages.clear();
+		keys.clear();
+	}
+
+	/**
+	 * An immutable object holding a key and its number of occurrences.
+	 */
+	private class FrequencyKeyPair implements Comparable<FrequencyKeyPair> {
+		private final String key;
+		private final int frequency;
+
+		/**
+		 * Creates a new FK pair.
+		 * 
+		 * @param key The key to set
+		 * @param frequency The occurrences to set
+		 */
+		public FrequencyKeyPair(String key, int frequency) {
+			this.key = key;
+			this.frequency = frequency;
+		}
+
+		/**
+		 * Creates a new FK pair with the same key and frequency increased by one.
+		 * 
+		 * @return An incremented FK pair
+		 */
+		public FrequencyKeyPair incrementUsages() {
+			return new FrequencyKeyPair(key, frequency + 1);
+		}
+
+		@Override
+		public int compareTo(FrequencyKeyPair o) {
+			int diff = this.frequency - o.frequency;
+			if (diff == 0) diff = this.key.compareTo(o.key);
+			return diff;
+		}
 	}
 
 }
