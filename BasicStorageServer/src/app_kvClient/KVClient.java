@@ -67,6 +67,21 @@ public class KVClient implements IKVClient {
 		clientApplication.runInterface();
 	}
 
+	@Override
+	public KVCommInterface getStore() {
+		return commModule;
+	}
+
+	/**
+	 * Explicitly sets this object's client-side communications module for testing
+	 * purposes.
+	 * 
+	 * @param commModule The KV store to use
+	 */
+	public void setStore(KVCommInterface commModule) {
+		this.commModule = commModule;
+	}
+
 	/**
 	 * Starts the command line interface for the KV client application.
 	 */

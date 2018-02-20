@@ -15,6 +15,7 @@ import testing.app_kvServer.cache.LruCacheManagerTest;
 		ConnectionTest.class,
 		InteractionTest.class,
 		IllegalArgumentTest.class,
+		KVClientTest.class,
 		FifoCacheManagerTest.class,
 		LfuCacheManagerTest.class,
 		LruCacheManagerTest.class
