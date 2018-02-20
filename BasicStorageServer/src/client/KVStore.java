@@ -10,7 +10,6 @@ import org.apache.log4j.Logger;
 import common.messages.BasicKVMessage;
 import common.messages.KVMessage;
 import common.messages.KVMessage.StatusType;
-import common.messages.SerializableKVMessage;
 
 /**
  * Provides the implementation for the client-side communications module.
@@ -82,7 +81,7 @@ public class KVStore implements KVCommInterface {
 			throw new IllegalArgumentException("Illegal <value> value");
 		}
 
-		SerializableKVMessage putMessage = new BasicKVMessage(key, value, StatusType.PUT);
+		KVMessage putMessage = new BasicKVMessage(key, value, StatusType.PUT);
 		BasicKVMessage.sendMessage(out, putMessage);
 
 		return BasicKVMessage.receiveMessage(in);
@@ -99,7 +98,7 @@ public class KVStore implements KVCommInterface {
 
 		}
 
-		SerializableKVMessage getMessage = new BasicKVMessage(key, null, StatusType.GET);
+		KVMessage getMessage = new BasicKVMessage(key, null, StatusType.GET);
 		BasicKVMessage.sendMessage(out, getMessage);
 
 		return BasicKVMessage.receiveMessage(in);

@@ -10,7 +10,7 @@ import org.apache.log4j.Logger;
  * A naive implementation of a message which contains key, value, and status
  * information. Contains marshalling and unmarshalling functions.
  */
-public class BasicKVMessage implements SerializableKVMessage {
+public class BasicKVMessage implements KVMessage {
 
 	private static final Logger log = Logger.getLogger(BasicKVMessage.class);
 
@@ -118,7 +118,7 @@ public class BasicKVMessage implements SerializableKVMessage {
 	 * @throws IOException If an IO exception occurs while encoding or
 	 *             transmitting the message
 	 */
-	public static void sendMessage(OutputStream out, SerializableKVMessage msg) throws IOException {
+	public static void sendMessage(OutputStream out, KVMessage msg) throws IOException {
 		String msgStr = msg.toMessageString();
 		byte[] msgBytes = msgStr.getBytes("UTF-8");
 
@@ -185,7 +185,7 @@ public class BasicKVMessage implements SerializableKVMessage {
 		msgBytes = tmp;
 
 		/* build final String */
-		SerializableKVMessage msg = BasicKVMessage.fromBytes(msgBytes);
+		KVMessage msg = BasicKVMessage.fromBytes(msgBytes);
 		log.info("Received message: '" + msg.toMessageString().trim() + "'");
 		return msg;
 	}

@@ -8,8 +8,8 @@ import java.net.Socket;
 import org.apache.log4j.Logger;
 
 import common.messages.BasicKVMessage;
+import common.messages.KVMessage;
 import common.messages.KVMessage.StatusType;
-import common.messages.SerializableKVMessage;
 
 /**
  * The class oversees a single server-side client connection session. When run
@@ -48,7 +48,7 @@ public class ClientConnection implements Runnable {
 			while (isOpen) {
 
 				// receive message from client
-				SerializableKVMessage request = null;
+				KVMessage request = null;
 				try {
 					log.info("Listening for client messages");
 					request = BasicKVMessage.receiveMessage(in);
@@ -109,7 +109,7 @@ public class ClientConnection implements Runnable {
 					// ignore unexpected requests
 					break;
 				}
-				SerializableKVMessage outMsg = new BasicKVMessage(outKey, outValue, outStatus);
+				KVMessage outMsg = new BasicKVMessage(outKey, outValue, outStatus);
 				BasicKVMessage.sendMessage(out, outMsg);
 
 				/*

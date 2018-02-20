@@ -50,6 +50,11 @@ public interface KVMessage {
 	 */
 	public StatusType getStatus();
 	
+	/**
+	 * Serializes this KV message as a simple string.
+	 * 
+	 * @return The serialized message string
+	 */
+	public String toMessageString();
+
 }
-
-
