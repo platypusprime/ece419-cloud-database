@@ -34,14 +34,14 @@ public interface KVMessage {
 	 * @return The key, or <code>null</code> if no key is associated
 	 */
 	public String getKey();
-	
+
 	/**
 	 * Retrieves the value associated with this message.
 	 * 
 	 * @return The value, or <code>null</code> if no value is associated
 	 */
 	public String getValue();
-	
+
 	/**
 	 * Retrieves the status associated with this message. Used to identify
 	 * request/response/error types.
@@ -49,7 +49,7 @@ public interface KVMessage {
 	 * @return The status
 	 */
 	public StatusType getStatus();
-	
+
 	/**
 	 * Serializes this KV message as a simple string.
 	 * 

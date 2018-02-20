@@ -16,7 +16,7 @@ public class BasicKVMessage implements KVMessage {
 
 	private static final int BUFFER_SIZE = 1024;
 	private static final int DROP_SIZE = 1024 * BUFFER_SIZE;
-	
+
 	private final String key;
 	private final String value;
 	private final StatusType status;
@@ -43,20 +43,28 @@ public class BasicKVMessage implements KVMessage {
 	 *         if no message could be constructed
 	 */
 	public static BasicKVMessage fromString(String msgString) {
+		StatusType status = null;
 		String key = null, value = null;
-		StatusType status;
 
-		String[] tokens = msgString.split(" ", 3);
+		String[] tokens = msgString.split("\\s+", 3);
 
-		status = StatusType.valueOf(tokens[0]);
+		if (tokens.length > 0 && tokens[0] != null) {
+			try {
+				status = StatusType.valueOf(tokens[0]);
+			} catch (IllegalArgumentException e) {
+				log.warn("Received invalid status type: " + tokens[0], e);
+			}
+		}
 
-		if (tokens.length == 2) {
+		if (tokens.length > 1) {
 			key = tokens[1].trim();
-		} else if (tokens.length == 3) {
-			key = tokens[1].trim();
+		}
+
+		if (tokens.length > 2) {
 			value = tokens[2].trim();
 		}
 
+		if (key == null && value == null && status == null) return null;
 		return new BasicKVMessage(key, value, status);
 	}
 
@@ -138,14 +146,17 @@ public class BasicKVMessage implements KVMessage {
 	 */
 	public static KVMessage receiveMessage(InputStream in) throws IOException {
 		log.debug("Waiting for message...");
-		
+
 		int index = 0;
 		byte[] msgBytes = null, tmp = null;
 		byte[] bufferBytes = new byte[BUFFER_SIZE];
 
 		byte read;
 		boolean reading = true;
-		while ((read = (byte) in.read()) != 13 && read != 10 && read != -1 && reading) {/* carriage return */
+		while ((read = (byte) in.read()) != -1 // EOS
+				&& read != 10  	// '\n'
+				&& read != 13 	// '\r'
+				&& reading) {
 			/* if buffer filled, copy to msg array */
 			if (index == BUFFER_SIZE) {
 				if (msgBytes == null) {
@@ -154,8 +165,7 @@ public class BasicKVMessage implements KVMessage {
 				} else {
 					tmp = new byte[msgBytes.length + BUFFER_SIZE];
 					System.arraycopy(msgBytes, 0, tmp, 0, msgBytes.length);
-					System.arraycopy(bufferBytes, 0, tmp, msgBytes.length,
-							BUFFER_SIZE);
+					System.arraycopy(bufferBytes, 0, tmp, msgBytes.length, BUFFER_SIZE);
 				}
 
 				msgBytes = tmp;
@@ -170,7 +180,6 @@ public class BasicKVMessage implements KVMessage {
 			if (msgBytes != null && msgBytes.length + index >= DROP_SIZE) {
 				reading = false;
 			}
-
 		}
 
 		if (msgBytes == null) {
