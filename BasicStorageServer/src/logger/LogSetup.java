@@ -52,6 +52,7 @@ public class LogSetup {
 		ConsoleAppender consoleAppender = new ConsoleAppender(consoleLayout);
 
 		Logger rootLogger = Logger.getRootLogger();
+		rootLogger.removeAllAppenders();
 		rootLogger.addAppender(consoleAppender);
 		rootLogger.addAppender(fileAppender);
 		rootLogger.setLevel(level);
