@@ -1,34 +1,16 @@
 package testing;
 
-import java.io.IOException;
+import org.junit.runner.RunWith;
+import org.junit.runners.Suite;
 
-import org.apache.log4j.Level;
-
-import app_kvServer.KVServer;
-import junit.framework.Test;
-import junit.framework.TestSuite;
-import logger.LogSetup;
-
-public class AllTests {
-
-	static {
-		try {
-			LogSetup.initialize("logs/testing/test.log", Level.ERROR);
-			KVServer server = new KVServer(50000, 10, "FIFO");
-			server.clearCache();
-			server.clearStorage();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
-
-	public static Test suite() {
-		TestSuite clientSuite = new TestSuite("Basic Storage ServerTest-Suite");
-		clientSuite.addTestSuite(ConnectionTest.class);
-		clientSuite.addTestSuite(InteractionTest.class);
-		clientSuite.addTestSuite(CacheTest.class);
-		clientSuite.addTestSuite(IllegalArgumentTest.class);
-		return clientSuite;
-	}
-
-}
+/**
+ * An aggregate test suite that runs all tests for the storage server project.
+ */
+@RunWith(Suite.class)
+@Suite.SuiteClasses({
+		ConnectionTest.class,
+		InteractionTest.class,
+		CacheTest.class,
+		IllegalArgumentTest.class
+})
+public class AllTests {}
