@@ -46,6 +46,20 @@ public interface IKVServer {
 	public int getCacheSize();
 
 	/**
+	 * Adds a client to the client connections list.
+	 * 
+	 * @param client The client to add to the client connections list
+	 */
+	public void registerClientConnection(ClientConnection client);
+
+	/**
+	 * Removes a client from the client connections list.
+	 * 
+	 * @param client The client to remove from the client connections list
+	 */
+	public void deregisterClientConnection(ClientConnection client);
+
+	/**
 	 * Check if key is in storage. NOTE: does not modify any other properties
 	 * 
 	 * @param key The key to check
@@ -79,6 +93,19 @@ public interface IKVServer {
 	 * @throws Exception when key not in the key range of the server
 	 */
 	public void putKV(String key, String value) throws Exception;
+
+	/**
+	 * Put the specified key-value pair into storage and return the previous value.
+	 * Updates the cache as well.
+	 * 
+	 * @param key The key to set
+	 * @param value The value to set. If this is <code>null</code> or the empty
+	 *            string, the existing entry for the key will be deleted.
+	 * @return The previous value associated with the key, or <code>null</code> if
+	 *         no such entry previously existed
+	 * @throws Exception If there is a problem retrieving the value
+	 */
+	public String putAndGetPrevKV(String key, String value) throws Exception;
 
 	/**
 	 * Clear the local cache of the server

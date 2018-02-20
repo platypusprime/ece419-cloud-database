@@ -22,8 +22,10 @@ public class ClientConnection implements Runnable {
 
 	private Socket clientSocket;
 	private final KVServer server;
-	
+
 	private boolean isOpen;
+
+	// TODO implement equals()
 
 	/**
 	 * Constructs a new CientConnection object for a given TCP socket.
