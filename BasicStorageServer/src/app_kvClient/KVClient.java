@@ -68,6 +68,13 @@ public class KVClient implements IKVClient {
 	}
 
 	@Override
+	public void newConnection(String hostname, int port) throws Exception {
+		log.info("Establishing connection to server at " + hostname + ":" + port);
+		this.commModule = new KVStore(hostname, port);
+		this.commModule.connect();
+	}
+
+	@Override
 	public KVCommInterface getStore() {
 		return commModule;
 	}
@@ -101,7 +108,7 @@ public class KVClient implements IKVClient {
 				}
 			}
 		} catch (IOException e) {
-			log.fatal("IO exception while establishing standard input reader", e);
+			log.fatal("IO exception while closing standard input reader", e);
 		}
 
 		log.info("KVClient shutting down");
@@ -115,56 +122,31 @@ public class KVClient implements IKVClient {
 	 * @return <code>true</code> if no further commands should be processed,
 	 *         <code>false</code> otherwise
 	 */
-	private boolean handleCommand(String ln) {
-		if (ln == null || ln.isEmpty()) return false;
+	public boolean handleCommand(String ln) {
+		if (ln == null || ln.isEmpty()) {
+			handleInvalidCommand();
+			return false;
+		}
 
 		String[] tokens = ln.trim().split("\\s+", 3);
 
 		if (tokens.length < 1) {
-			log.warn("Unknown command;");
-			printHelp();
+			handleInvalidCommand();
 
 		} else if (tokens[0].equals("connect")) {
-			if (commModule != null) {
-				log.warn("already connected to server; disconnect first");
-				return false;
-			}
-			try {
-				String hostname = tokens[1];
-				int port = Integer.parseInt(tokens[2]);
-				newConnection(hostname, port);
-
-			} catch (ArrayIndexOutOfBoundsException e) {
-				log.error("insufficient arguments for connect command");
-			} catch (NumberFormatException e) {
-				log.error("could not parse port number as an integer: " + tokens[2]);
-			} catch (Exception e) {
-				log.error("could not establish connection to server", e);
-			}
+			handleConnect(tokens);
 
 		} else if (tokens[0].equals("disconnect")) {
 			disconnect();
 
 		} else if (tokens[0].equals("put")) {
-			if (tokens.length == 2) {
-				sendPut(tokens[1], null);
-			} else if (tokens.length >= 3) {
-				sendPut(tokens[1], tokens[2]);
-			} else if (tokens.length < 2) {
-				log.error("insufficient arguments for put command");
-			}
+			handlePut(tokens);
 
 		} else if (tokens[0].equals("get")) {
-			if (tokens.length < 2) {
-				log.error("insufficient arguments for get command");
-			}
-			sendGet(tokens[1]);
+			handleGet(tokens);
 
 		} else if (tokens[0].equals("logLevel")) {
-			if (tokens.length < 2) {
-				log.error("insufficient arguments for logLevel command");
-			}
-			setLogLevel(tokens[1]);
+			handleLogLevel(tokens);
 
 		} else if (tokens[0].equals("help")) {
 			printHelp();
@@ -174,23 +156,85 @@ public class KVClient implements IKVClient {
 			return true;
 
 		} else {
-			log.warn("Unknown command;");
-			printHelp();
+			handleInvalidCommand();
 		}
 
 		return false;
 	}
 
-	@Override
-	public void newConnection(String hostname, int port) throws Exception {
-		log.info("Establishing connection to server at " + hostname + ":" + port);
-		this.commModule = new KVStore(hostname, port);
-		commModule.connect();
+	/**
+	 * Processes a <code>connect</code> command from the CLI.
+	 * 
+	 * @param tokens The tokenized command
+	 */
+	private void handleConnect(String[] tokens) {
+		if (commModule != null) {
+			// TODO handle unexpected disconnects
+			log.error("Already connected to server; disconnect first");
+			return;
+		}
+
+		try {
+			String hostname = tokens[1];
+			int port = Integer.parseInt(tokens[2]);
+			newConnection(hostname, port);
+
+		} catch (ArrayIndexOutOfBoundsException e) {
+			log.error("Insufficient arguments for connect command");
+		} catch (NumberFormatException e) {
+			log.error("Could not parse port number as an integer: " + tokens[2]);
+		} catch (Exception e) {
+			log.error("Could not establish connection to server", e);
+		}		
 	}
 
-	@Override
-	public KVCommInterface getStore() {
-		return commModule;
+	/**
+	 * Processes a <code>put</code> command from the CLI.
+	 * 
+	 * @param tokens The tokenized command
+	 */
+	private void handlePut(String[] tokens) {
+		if (tokens.length == 2) {
+			sendPut(tokens[1], null);
+		} else if (tokens.length >= 3) {
+			sendPut(tokens[1], tokens[2]);
+		} else if (tokens.length < 2) {
+			log.error("Insufficient arguments for put command");
+		}
+	}
+
+	/**
+	 * Processes a <code>get</code> command from the CLI.
+	 * 
+	 * @param tokens The tokenized command
+	 */
+	private void handleGet(String[] tokens) {
+		if (tokens.length >= 2) {
+			sendGet(tokens[1]);
+		} else {
+			log.error("Insufficient arguments for get command");
+		}
+	}
+
+	/**
+	 * Processes a <code>logLevel</code> command from the CLI.
+	 * 
+	 * @param tokens The tokenized command
+	 */
+	private void handleLogLevel(String[] tokens) {
+		if (tokens.length >= 2) {
+			setLogLevel(tokens[1]);
+		} else {
+			log.error("Insufficient arguments for logLevel command");
+		}
+	}
+
+	/**
+	 * Processes an unknown or empty command from the CLI.
+	 */
+	private void handleInvalidCommand() {
+		log.warn("Unknown command;");
+		printHelp();
 	}
 
 	/**
@@ -201,9 +245,11 @@ public class KVClient implements IKVClient {
 		if (commModule != null) {
 			commModule.disconnect();
 			commModule = null;
+			
+			log.info("Disconnect successful");
 
 		} else {
-			log.info("No current server connection; skipping disconnect");
+			log.warn("No current server connection; skipping disconnect");
 		}
 	}
 
@@ -271,7 +317,7 @@ public class KVClient implements IKVClient {
 			}
 
 		} catch (Exception e) {
-			log.error("could not establish connection to server", e);
+			log.error("Exception encountered while executing get", e);
 		}
 	}
 
@@ -306,8 +352,8 @@ public class KVClient implements IKVClient {
 		log.info("\tTries to disconnect from the connected server");
 		log.info("put <key> <value>");
 		log.info("\tInserts a key-value pair into the storage server data structures");
-		log.info(
-				"\tUpdates (overwrites) the current value with the given value if the server already contains the specified key");
+		log.info("\tUpdates (overwrites) the current value with the given value if "
+				+ "the server already contains the specified key");
 		log.info("\tDeletes the entry for the given key if <value> is empty");
 		log.info("get <key>");
 		log.info("\tRetrieves the value for the given key from the storage server");
