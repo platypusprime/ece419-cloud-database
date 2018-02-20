@@ -5,6 +5,7 @@
     	<conf name="test" visibility="public" extends="compile" />
 	</configurations>
     <dependencies>
+        <dependency org="org.apache.zookeeper" name="zookeeper" rev="3.4.11" conf="compile->*" />
         <dependency org="log4j" name="log4j" rev="1.2.17" conf="compile->*" />
         <dependency org="junit" name="junit" rev="4.10" conf="test->*" />
         <dependency org="org.mockito" name="mockito-core" rev="2.15.0" conf="test->*" />

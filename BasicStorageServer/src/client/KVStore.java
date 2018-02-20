@@ -59,6 +59,12 @@ public class KVStore implements KVCommInterface {
 		}
 	}
 
+	@Override
+	public boolean isConnected() {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
 	private void tearDownConnection() throws IOException {
 		log.info("tearing down the connection ...");
 		if (clientSocket != null) {

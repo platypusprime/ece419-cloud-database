@@ -25,6 +25,14 @@ public interface KVCommInterface {
 	public void disconnect();
 
 	/**
+	 * Tests if this store is currently connected to a server.
+	 * 
+	 * @return <code>true</code> if connected to server,
+	 *         <code>false</code> otherwise
+	 */
+	public boolean isConnected();
+
+	/**
 	 * Issues an insert, update, or delete request to the connected KV server.
 	 *
 	 * @param key The key to put a value for

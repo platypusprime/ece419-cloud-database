@@ -40,6 +40,49 @@ public class KVServer implements IKVServer, Runnable {
 	private List<ClientConnection> clients = new ArrayList<>(); // TODO handle de-registering clients
 
 	/**
+	 * Main entry point for the echo server application.
+	 * 
+	 * @param args contains the port number at args[0], cache size at args[1], and
+	 *            cache strategy at args[2].
+	 */
+	public static void main(String[] args) {
+		try {
+			LogSetup.initialize("logs/server.log", Level.INFO, SERVER_CONSOLE_PATTERN);
+			if (args.length == 3) {
+				int port = Integer.parseInt(args[0]);
+				int cacheSize = Integer.parseInt(args[1]);
+				String strategy = args[2];
+				new KVServer(port, cacheSize, strategy);
+			} else {
+				System.out.println("Error! Invalid number of arguments!");
+				System.out.println("Usage: KVServer <port> <cacheSize> <cacheStrategy>");
+			}
+	
+		} catch (IOException e) {
+			System.out.println("Error! Unable to initialize logger!");
+			e.printStackTrace();
+			System.exit(1);
+	
+		} catch (NumberFormatException nfe) {
+			System.out.println("Error! Invalid argument(s) <port> and/or <cacheSize>! Not a number!");
+			System.out.println("Usage: Server <port> <cacheSize> <cacheStrategy>");
+			System.exit(1);
+		}
+	}
+
+	/**
+	 * Start KV Server with selected name
+	 * 
+	 * @param name unique name of server
+	 * @param zkHostname hostname where zookeeper is running
+	 * @param zkPort port where zookeeper is running
+	 */
+	public KVServer(String name, String zkHostname, int zkPort) {
+		// TODO Auto-generated method stub
+		this(-1, -1, null);
+	}
+
+	/**
 	 * Creates and starts KV Server at given port.
 	 * 
 	 * @param port given port for storage server to operate
@@ -49,6 +92,7 @@ public class KVServer implements IKVServer, Runnable {
 	 *            full and there is a GET- or PUT-request on a key that is currently
 	 *            not contained in the cache. Options are "FIFO", "LRU", and "LFU".
 	 */
+	@Deprecated
 	public KVServer(int port, int cacheSize, String strategy) {
 		// set up cache
 		switch (strategy) {
@@ -243,34 +287,33 @@ public class KVServer implements IKVServer, Runnable {
 		}
 	}
 
-	/**
-	 * Main entry point for the echo server application.
-	 * 
-	 * @param args contains the port number at args[0], cache size at args[1], and
-	 *            cache strategy at args[2].
-	 */
-	public static void main(String[] args) {
-		try {
-			LogSetup.initialize("logs/server.log", Level.INFO, SERVER_CONSOLE_PATTERN);
-			if (args.length == 3) {
-				int port = Integer.parseInt(args[0]);
-				int cacheSize = Integer.parseInt(args[1]);
-				String strategy = args[2];
-				new KVServer(port, cacheSize, strategy);
-			} else {
-				System.out.println("Error! Invalid number of arguments!");
-				System.out.println("Usage: KVServer <port> <cacheSize> <cacheStrategy>");
-			}
+	@Override
+	public void start() {
+		// TODO Auto-generated method stub
+		
+	}
 
-		} catch (IOException e) {
-			System.out.println("Error! Unable to initialize logger!");
-			e.printStackTrace();
-			System.exit(1);
+	@Override
+	public void stop() {
+		// TODO Auto-generated method stub
+		
+	}
 
-		} catch (NumberFormatException nfe) {
-			System.out.println("Error! Invalid argument(s) <port> and/or <cacheSize>! Not a number!");
-			System.out.println("Usage: Server <port> <cacheSize> <cacheStrategy>");
-			System.exit(1);
-		}
+	@Override
+	public void lockWrite() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public void unlockWrite() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	@Override
+	public boolean moveData(String[] hashRange, String targetName) throws Exception {
+		// TODO Auto-generated method stub
+		return false;
 	}
 }
