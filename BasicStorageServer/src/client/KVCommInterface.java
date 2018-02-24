@@ -25,7 +25,7 @@ public interface KVCommInterface {
 	public void disconnect();
 
 	/**
-	 * Tests if this store is currently connected to a server.
+	 * Tests whether this store is currently connected to a server.
 	 * 
 	 * @return <code>true</code> if connected to server,
 	 *         <code>false</code> otherwise

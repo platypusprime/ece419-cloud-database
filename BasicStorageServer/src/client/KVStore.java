@@ -3,11 +3,16 @@ package client;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.log4j.Logger;
 
+import common.HashUtil;
 import common.messages.BasicKVMessage;
+import common.messages.HashRange;
 import common.messages.KVMessage;
 import common.messages.KVMessage.StatusType;
 
@@ -25,8 +30,9 @@ public class KVStore implements KVCommInterface {
 	private OutputStream out;
 	private InputStream in;
 
-	private final String address;
-	private final int port;
+	private InetSocketAddress currentServer;
+	private final Map<HashRange, InetSocketAddress> serverMetadata;
+	private boolean isConnected;
 
 	/**
 	 * Initialize KVStore with address and port of KVServer
@@ -35,13 +41,17 @@ public class KVStore implements KVCommInterface {
 	 * @param port the port of the KVServer
 	 */
 	public KVStore(String address, int port) {
-		this.address = address;
-		this.port = port;
+		this.currentServer = new InetSocketAddress(address, port);
+		this.serverMetadata = new HashMap<>();
+		this.isConnected = false;
 	}
 
 	@Override
 	public void connect() throws Exception {
-		clientSocket = new Socket(address, port);
+		clientSocket = new Socket();
+		clientSocket.connect(currentServer);
+		this.isConnected = true;
+
 		out = clientSocket.getOutputStream();
 		in = clientSocket.getInputStream();
 
@@ -57,12 +67,13 @@ public class KVStore implements KVCommInterface {
 		} catch (IOException ioe) {
 			log.error("Unable to close connection!");
 		}
+
+		this.isConnected = false;
 	}
 
 	@Override
 	public boolean isConnected() {
-		// TODO Auto-generated method stub
-		return false;
+		return isConnected;
 	}
 
 	private void tearDownConnection() throws IOException {
@@ -76,6 +87,10 @@ public class KVStore implements KVCommInterface {
 
 	@Override
 	public KVMessage put(String key, String value) throws Exception {
+		String keyHash;
+		KVMessage response = null;
+		boolean gotRightServer = false;
+
 		if (clientSocket == null) {
 			throw new IllegalArgumentException("Not currently connected to server");
 
@@ -87,14 +102,47 @@ public class KVStore implements KVCommInterface {
 			throw new IllegalArgumentException("Illegal <value> value");
 		}
 
-		KVMessage putMessage = new BasicKVMessage(key, value, StatusType.PUT);
-		BasicKVMessage.sendMessage(out, putMessage);
+		keyHash = HashUtil.toMD5(key);
 
-		return BasicKVMessage.receiveMessage(in);
+		// keep contacting servers until the right one gets hit
+		while (!gotRightServer) {
+
+			// check which server is responsible for the key
+			InetSocketAddress server = serverMetadata.entrySet().stream()
+					.filter(entry -> entry.getKey().containsHash(keyHash))
+					.findFirst()
+					.map(Map.Entry::getValue).get();
+
+			// swap servers if necessary
+			if (!server.equals(currentServer)) {
+				// TODO deal with the log messages
+				disconnect();
+				currentServer = server;
+				connect();
+			}
+
+			KVMessage putMessage = new BasicKVMessage(key, value, StatusType.PUT);
+			BasicKVMessage.sendMessage(out, putMessage);
+
+			response = BasicKVMessage.receiveMessage(in);
+			if (response.getStatus() != StatusType.SERVER_NOT_RESPONSIBLE) {
+				gotRightServer = true;
+			} else {
+				// update metadata
+				serverMetadata.clear();
+				serverMetadata.putAll(response.getHashRanges());
+			}
+		}
+
+		return response;
 	}
 
 	@Override
 	public KVMessage get(String key) throws Exception {
+		String keyHash;
+		KVMessage response = null;
+		boolean gotRightServer = false;
+
 		if (clientSocket == null) {
 			throw new IllegalArgumentException("Not currently connected to server");
 
@@ -104,11 +152,39 @@ public class KVStore implements KVCommInterface {
 
 		}
 
-		KVMessage getMessage = new BasicKVMessage(key, null, StatusType.GET);
-		BasicKVMessage.sendMessage(out, getMessage);
+		keyHash = HashUtil.toMD5(key);
 
-		return BasicKVMessage.receiveMessage(in);
+		// keep contacting servers until the right one gets hit
+		while (!gotRightServer) {
 
+			// check which server is responsible for the key
+			InetSocketAddress server = serverMetadata.entrySet().stream()
+					.filter(entry -> entry.getKey().containsHash(keyHash))
+					.findFirst()
+					.map(Map.Entry::getValue).get();
+
+			// swap servers if necessary
+			if (!server.equals(currentServer)) {
+				// TODO deal with the log messages
+				disconnect();
+				currentServer = server;
+				connect();
+			}
+
+			KVMessage getMessage = new BasicKVMessage(key, null, StatusType.GET);
+			BasicKVMessage.sendMessage(out, getMessage);
+
+			response = BasicKVMessage.receiveMessage(in);
+			if (response.getStatus() != StatusType.SERVER_NOT_RESPONSIBLE) {
+				gotRightServer = true;
+			} else {
+				// update metadata
+				serverMetadata.clear();
+				serverMetadata.putAll(response.getHashRanges());
+			}
+		}
+
+		return response;
 	}
 
 }
