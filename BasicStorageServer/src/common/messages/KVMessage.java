@@ -38,6 +38,24 @@ public interface KVMessage {
 		SERVER_NOT_RESPONSIBLE
 	}
 
+	/** The JSON attribute name for the status. */
+	public static final String STATUS_ATTR = "status";
+
+	/** The JSON attribute name for the key. */
+	public static final String KEY_ATTR = "key";
+
+	/** The JSON attribute name for the value. */
+	public static final String VALUE_ATTR = "value";
+
+	/** The JSON attribute name for the metadata. */
+	public static final String METADATA_ATTR = "metadata";
+
+	/** The JSON attribute name for a server hostname. */
+	public static final String HOST_ATTR = "hostname";
+
+	/** The JSON attribute name for a server port number. */
+	public static final String PORT_ATTR = "port";
+
 	/**
 	 * Retrieves the key associated with this message.
 	 * 

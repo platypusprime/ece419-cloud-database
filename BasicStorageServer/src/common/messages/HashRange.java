@@ -7,6 +7,12 @@ package common.messages;
  */
 public class HashRange {
 
+	/** The JSON attribute name for the hash range start index. */
+	public static final String START_ATTR = "startIndex";
+
+	/** The JSON attribute name for the hash range end index. */
+	public static final String END_ATTR = "endIndex";
+
 	private String start;
 	private String end;
 

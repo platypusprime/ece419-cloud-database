@@ -10,8 +10,11 @@ public class MetadataUpdateMessage implements KVMessage {
 
 	/**
 	 * TODO document me
+	 * 
+	 * @param hashRanges TODO document me
+	 * @param status TODO document me
 	 */
-	public MetadataUpdateMessage() {
+	public MetadataUpdateMessage(Map<HashRange, InetSocketAddress> hashRanges, StatusType status) {
 		// TODO Auto-generated method stub
 	}
 
