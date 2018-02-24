@@ -1,8 +1,11 @@
 package common.messages;
 
+import java.net.InetSocketAddress;
+import java.util.Map;
+
 /**
- * Provides the interface for a network communications message which can contain
- * a key, value, and status message.
+ * Provides the interface for a network communications message which contains a
+ * status message and optional key, value, and/or metadata information.
  */
 public interface KVMessage {
 
@@ -40,14 +43,18 @@ public interface KVMessage {
 	 * 
 	 * @return The key, or <code>null</code> if no key is associated
 	 */
-	public String getKey();
+	public default String getKey() {
+		return null;
+	}
 
 	/**
 	 * Retrieves the value associated with this message.
 	 * 
 	 * @return The value, or <code>null</code> if no value is associated
 	 */
-	public String getValue();
+	public default String getValue() {
+		return null;
+	}
 
 	/**
 	 * Retrieves the status associated with this message. Used to identify
@@ -56,6 +63,15 @@ public interface KVMessage {
 	 * @return The status
 	 */
 	public StatusType getStatus();
+
+	/**
+	 * Retrieves the server hash ranges associated with this message.
+	 * 
+	 * @return A map containing hash ranges mapped to server addresses
+	 */
+	public default Map<HashRange, InetSocketAddress> getHashRanges() {
+		return null;
+	}
 
 	/**
 	 * Serializes this KV message as a simple string.
