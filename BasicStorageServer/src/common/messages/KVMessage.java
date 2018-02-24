@@ -1,7 +1,6 @@
 package common.messages;
 
-import java.net.InetSocketAddress;
-import java.util.Map;
+import java.util.Set;
 
 /**
  * Provides the interface for a network communications message which contains a
@@ -50,12 +49,6 @@ public interface KVMessage {
 	/** The JSON attribute name for the metadata. */
 	public static final String METADATA_ATTR = "metadata";
 
-	/** The JSON attribute name for a server hostname. */
-	public static final String HOST_ATTR = "hostname";
-
-	/** The JSON attribute name for a server port number. */
-	public static final String PORT_ATTR = "port";
-
 	/**
 	 * Retrieves the key associated with this message.
 	 * 
@@ -87,7 +80,7 @@ public interface KVMessage {
 	 * 
 	 * @return A map containing hash ranges mapped to server addresses
 	 */
-	public default Map<HashRange, InetSocketAddress> getHashRanges() {
+	public default Set<ServerMetadata> getServerMetadata() {
 		return null;
 	}
 

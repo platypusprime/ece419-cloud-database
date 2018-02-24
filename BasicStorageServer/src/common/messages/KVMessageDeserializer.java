@@ -1,17 +1,12 @@
 package common.messages;
 
-import static common.messages.HashRange.END_ATTR;
-import static common.messages.HashRange.START_ATTR;
-import static common.messages.KVMessage.HOST_ATTR;
 import static common.messages.KVMessage.KEY_ATTR;
 import static common.messages.KVMessage.METADATA_ATTR;
-import static common.messages.KVMessage.PORT_ATTR;
 import static common.messages.KVMessage.STATUS_ATTR;
 
 import java.lang.reflect.Type;
-import java.net.InetSocketAddress;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonDeserializationContext;
@@ -48,7 +43,7 @@ public class KVMessageDeserializer implements JsonDeserializer<KVMessage> {
 
 		switch (status) {
 		case SERVER_NOT_RESPONSIBLE:
-			return deserializeMetadataUpdateMessage(messageObject, status);
+			return deserializeMetadataUpdateMessage(messageObject, context, status);
 		default:
 			return deserializeBasicKVMessage(messageObject, status);
 		}
@@ -79,12 +74,15 @@ public class KVMessageDeserializer implements JsonDeserializer<KVMessage> {
 	 * Deserializes a general KV message with a key, value, and status type.
 	 * 
 	 * @param json The JSON object to deserialize
+	 * @param context The deserialization context to use for deserializing
+	 *            {@link ServerMetadata} objects
 	 * @param status The status type associated with the message
 	 * @return A {@link BasicKVMessage} containing the deserialized fields
 	 * @throws JsonParseException If the JSON is not in the expected format
 	 */
-	public KVMessage deserializeMetadataUpdateMessage(JsonObject json, StatusType status) throws JsonParseException {
-		Map<HashRange, InetSocketAddress> hashRanges = new HashMap<>();
+	public KVMessage deserializeMetadataUpdateMessage(JsonObject json, JsonDeserializationContext context,
+			StatusType status) throws JsonParseException {
+		Set<ServerMetadata> metadata = new HashSet<>();
 
 		// extract metadata array
 		if (!json.has(METADATA_ATTR) || !json.get(METADATA_ATTR).isJsonArray())
@@ -93,27 +91,11 @@ public class KVMessageDeserializer implements JsonDeserializer<KVMessage> {
 
 		// add each element in the metadata array as an entry in the hash range table
 		for (JsonElement hashRangeElement : hashRangesArray) {
-			String start, end, host;
-			int port;
-
-			if (!hashRangeElement.isJsonObject())
-				throw new JsonParseException("Invalid metadata array element; expected JSON object");
-			JsonObject hashRangeObject = hashRangeElement.getAsJsonObject();
-
-			start = getMandatoryString(hashRangeObject, START_ATTR);
-			end = getMandatoryString(hashRangeObject, END_ATTR);
-
-			host = getMandatoryString(hashRangeObject, HOST_ATTR);
-			String portString = getMandatoryString(hashRangeObject, PORT_ATTR);
-			try {
-				port = Integer.parseInt(portString);
-			} catch (NumberFormatException e) {
-				throw new JsonParseException("Invalid port attribute value: " + portString, e);
-			}
-			hashRanges.put(new HashRange(start, end), new InetSocketAddress(host, port));
+			ServerMetadata currentMetadata = context.deserialize(hashRangeElement, ServerMetadata.class);
+			metadata.add(currentMetadata);
 		}
 
-		return new MetadataUpdateMessage(hashRanges, status);
+		return new MetadataUpdateMessage(metadata, status);
 	}
 
 	/**

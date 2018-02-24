@@ -1,17 +1,12 @@
 package common.messages;
 
-import static common.messages.HashRange.END_ATTR;
-import static common.messages.HashRange.START_ATTR;
-import static common.messages.KVMessage.HOST_ATTR;
 import static common.messages.KVMessage.KEY_ATTR;
-import static common.messages.KVMessage.PORT_ATTR;
 import static common.messages.KVMessage.STATUS_ATTR;
 import static common.messages.KVMessage.VALUE_ATTR;
 
 import java.lang.reflect.Type;
-import java.net.InetSocketAddress;
-import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -36,22 +31,13 @@ public class KVMessageSerializer implements JsonSerializer<KVMessage> {
 		Optional.ofNullable(src.getValue())
 				.ifPresent(value -> messageObject.addProperty(VALUE_ATTR, value));
 
-		Map<HashRange, InetSocketAddress> hashRanges = src.getHashRanges();
-		if (hashRanges != null && !hashRanges.isEmpty()) {
+		Set<ServerMetadata> metadata = src.getServerMetadata();
+		if (metadata != null && !metadata.isEmpty()) {
 			JsonArray metadataArray = new JsonArray();
 			messageObject.add(KVMessage.METADATA_ATTR, metadataArray);
-			for (Map.Entry<HashRange, InetSocketAddress> entry : hashRanges.entrySet()) {
-				JsonObject serverObject = new JsonObject();
-
-				HashRange range = entry.getKey();
-				serverObject.addProperty(START_ATTR, range.getStart());
-				serverObject.addProperty(END_ATTR, range.getEnd());
-
-				InetSocketAddress address = entry.getValue();
-				serverObject.addProperty(HOST_ATTR, address.getHostName());
-				serverObject.addProperty(PORT_ATTR, address.getPort());
-
-				metadataArray.add(serverObject);
+			for (ServerMetadata serverMetadata : metadata) {
+				JsonElement metadataElement = context.serialize(serverMetadata, ServerMetadata.class);
+				metadataArray.add(metadataElement);
 			}
 		}
 

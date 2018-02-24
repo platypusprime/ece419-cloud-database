@@ -5,16 +5,16 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 import org.apache.log4j.Logger;
 
 import common.HashUtil;
 import common.messages.BasicKVMessage;
-import common.messages.HashRange;
 import common.messages.KVMessage;
 import common.messages.KVMessage.StatusType;
+import common.messages.ServerMetadata;
 
 /**
  * Provides the implementation for the client-side communications module.
@@ -31,7 +31,7 @@ public class KVStore implements KVCommInterface {
 	private InputStream in;
 
 	private InetSocketAddress currentServer;
-	private final Map<HashRange, InetSocketAddress> serverMetadata;
+	private final Set<ServerMetadata> serverMetadata;
 	private boolean isConnected;
 
 	/**
@@ -42,7 +42,7 @@ public class KVStore implements KVCommInterface {
 	 */
 	public KVStore(String address, int port) {
 		this.currentServer = new InetSocketAddress(address, port);
-		this.serverMetadata = new HashMap<>();
+		this.serverMetadata = new HashSet<>();
 		this.isConnected = false;
 	}
 
@@ -108,10 +108,10 @@ public class KVStore implements KVCommInterface {
 		while (!gotRightServer) {
 
 			// check which server is responsible for the key
-			InetSocketAddress server = serverMetadata.entrySet().stream()
-					.filter(entry -> entry.getKey().containsHash(keyHash))
+			InetSocketAddress server = serverMetadata.stream()
+					.filter(md -> md.containsHash(keyHash))
 					.findFirst()
-					.map(Map.Entry::getValue).get();
+					.map(ServerMetadata::getClientSocketAddress).get();
 
 			// swap servers if necessary
 			if (!server.equals(currentServer)) {
@@ -130,7 +130,7 @@ public class KVStore implements KVCommInterface {
 			} else {
 				// update metadata
 				serverMetadata.clear();
-				serverMetadata.putAll(response.getHashRanges());
+				serverMetadata.addAll(response.getServerMetadata());
 			}
 		}
 
@@ -158,10 +158,10 @@ public class KVStore implements KVCommInterface {
 		while (!gotRightServer) {
 
 			// check which server is responsible for the key
-			InetSocketAddress server = serverMetadata.entrySet().stream()
-					.filter(entry -> entry.getKey().containsHash(keyHash))
+			InetSocketAddress server = serverMetadata.stream()
+					.filter(md -> md.containsHash(keyHash))
 					.findFirst()
-					.map(Map.Entry::getValue).get();
+					.map(ServerMetadata::getClientSocketAddress).get();
 
 			// swap servers if necessary
 			if (!server.equals(currentServer)) {
@@ -180,7 +180,7 @@ public class KVStore implements KVCommInterface {
 			} else {
 				// update metadata
 				serverMetadata.clear();
-				serverMetadata.putAll(response.getHashRanges());
+				serverMetadata.addAll(response.getServerMetadata());
 			}
 		}
 

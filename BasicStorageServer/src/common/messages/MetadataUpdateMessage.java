@@ -1,7 +1,6 @@
 package common.messages;
 
-import java.net.InetSocketAddress;
-import java.util.Map;
+import java.util.Set;
 
 /**
  * A message for communicating metadata updates.
@@ -11,10 +10,10 @@ public class MetadataUpdateMessage implements KVMessage {
 	/**
 	 * TODO document me
 	 * 
-	 * @param hashRanges TODO document me
+	 * @param metadata TODO document me
 	 * @param status TODO document me
 	 */
-	public MetadataUpdateMessage(Map<HashRange, InetSocketAddress> hashRanges, StatusType status) {
+	public MetadataUpdateMessage(Set<ServerMetadata> metadata, StatusType status) {
 		// TODO Auto-generated method stub
 	}
 
@@ -25,7 +24,7 @@ public class MetadataUpdateMessage implements KVMessage {
 	}
 
 	@Override
-	public Map<HashRange, InetSocketAddress> getHashRanges() {
+	public Set<ServerMetadata> getServerMetadata() {
 		// TODO Auto-generated method stub
 		return null;
 	}
