@@ -34,6 +34,8 @@ public class FilePersistenceManager implements KVPersistenceManager {
 	 * Creates a manager for the default persistence file
 	 * (<code>persistence.csv</code>).
 	 */
+	
+	@Deprecated
 	public FilePersistenceManager() {
 		this(DEFAULT_PERSISTENCE_FILENAME);
 	}
@@ -200,6 +202,7 @@ public class FilePersistenceManager implements KVPersistenceManager {
 		}
 	}
 
+
 	// TODO move this to unit tests
 	public static void main(String[] args) {
 		FilePersistenceManager test = new FilePersistenceManager();
@@ -219,5 +222,4 @@ public class FilePersistenceManager implements KVPersistenceManager {
 		System.out.println(String.format("test.put(\"newkey\", null): \"%s\"", test.put("newkey", null)));
 		System.out.println(String.format("test.put(\"newkey\", null): \"%s\"", test.put("foobar", null)));
 	}
-
 }
