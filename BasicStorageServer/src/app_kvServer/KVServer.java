@@ -47,11 +47,12 @@ public class KVServer implements IKVServer, Runnable {
 	 */
 	public static void main(String[] args) {
 		try {
-			LogSetup.initialize("logs/server.log", Level.INFO, SERVER_CONSOLE_PATTERN);
 			if (args.length == 3) {
 				int port = Integer.parseInt(args[0]);
 				int cacheSize = Integer.parseInt(args[1]);
 				String strategy = args[2];
+				
+				LogSetup.initialize("logs/server." + args[0] + ".log", Level.INFO, SERVER_CONSOLE_PATTERN);
 				new KVServer(port, cacheSize, strategy);
 			} else {
 				System.out.println("Error! Invalid number of arguments!");
@@ -114,7 +115,9 @@ public class KVServer implements IKVServer, Runnable {
 		Optional.ofNullable(cacheManager).ifPresent(cm -> cm.setCacheSize(cacheSize));
 
 		// set up storage
-		persistenceManager = new FilePersistenceManager();
+		// TODO: choose a better format for storage file name
+		String storageIdentifier = "Server " + String.valueOf(port) + ".csv";
+		persistenceManager = new FilePersistenceManager(storageIdentifier);
 
 		log.info("Created KVServer with "
 				+ "port=" + port + ", "
