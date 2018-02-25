@@ -1,14 +1,18 @@
 package common.messages;
 
 import static common.messages.KVMessage.KEY_ATTR;
+import static common.messages.KVMessage.RESPONSIBLE_NODE_ATTR;
 import static common.messages.KVMessage.STATUS_ATTR;
 import static common.messages.KVMessage.VALUE_ATTR;
+import static ecs.IECSNode.NODE_HOST_ATTR;
+import static ecs.IECSNode.NODE_NAME_ATTR;
+import static ecs.IECSNode.NODE_PORT_ATTR;
+import static ecs.IECSNode.NODE_RANGE_END_ATTR;
+import static ecs.IECSNode.NODE_RANGE_START_ATTR;
 
 import java.lang.reflect.Type;
 import java.util.Optional;
-import java.util.Set;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSerializationContext;
@@ -31,15 +35,19 @@ public class KVMessageSerializer implements JsonSerializer<KVMessage> {
 		Optional.ofNullable(src.getValue())
 				.ifPresent(value -> messageObject.addProperty(VALUE_ATTR, value));
 
-		Set<ServerMetadata> metadata = src.getServerMetadata();
-		if (metadata != null && !metadata.isEmpty()) {
-			JsonArray metadataArray = new JsonArray();
-			messageObject.add(KVMessage.METADATA_ATTR, metadataArray);
-			for (ServerMetadata serverMetadata : metadata) {
-				JsonElement metadataElement = context.serialize(serverMetadata, ServerMetadata.class);
-				metadataArray.add(metadataElement);
-			}
-		}
+		Optional.ofNullable(src.getResponsibleServer())
+				.ifPresent(server -> {
+					JsonObject serverObject = new JsonObject();
+
+					serverObject.addProperty(NODE_NAME_ATTR, server.getNodeName());
+					serverObject.addProperty(NODE_HOST_ATTR, server.getNodeHost());
+					serverObject.addProperty(NODE_PORT_ATTR, server.getNodePort());
+					String[] hashRange = server.getNodeHashRange();
+					serverObject.addProperty(NODE_RANGE_START_ATTR, hashRange[0]);
+					serverObject.addProperty(NODE_RANGE_END_ATTR, hashRange[1]);
+
+					messageObject.add(RESPONSIBLE_NODE_ATTR, serverObject);
+				});
 
 		return messageObject;
 	}

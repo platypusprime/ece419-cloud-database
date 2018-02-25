@@ -3,10 +3,9 @@ package client;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.log4j.Logger;
 
@@ -14,7 +13,8 @@ import common.HashUtil;
 import common.messages.BasicKVMessage;
 import common.messages.KVMessage;
 import common.messages.KVMessage.StatusType;
-import common.messages.ServerMetadata;
+import ecs.ECSNode;
+import ecs.IECSNode;
 
 /**
  * Provides the implementation for the client-side communications module.
@@ -30,8 +30,8 @@ public class KVStore implements KVCommInterface {
 	private OutputStream out;
 	private InputStream in;
 
-	private InetSocketAddress currentServer;
-	private final Set<ServerMetadata> serverMetadata;
+	private IECSNode currentServer;
+	private final Map<String, IECSNode> serverMetadata;
 	private boolean isConnected;
 
 	/**
@@ -41,15 +41,15 @@ public class KVStore implements KVCommInterface {
 	 * @param port the port of the KVServer
 	 */
 	public KVStore(String address, int port) {
-		this.currentServer = new InetSocketAddress(address, port);
-		this.serverMetadata = new HashSet<>();
+		this.currentServer = new ECSNode(address, port);
+		this.serverMetadata = new HashMap<>();
 		this.isConnected = false;
 	}
 
 	@Override
 	public void connect() throws Exception {
 		clientSocket = new Socket();
-		clientSocket.connect(currentServer);
+		clientSocket.connect(currentServer.getNodeSocketAddress());
 		this.isConnected = true;
 
 		out = clientSocket.getOutputStream();
@@ -87,10 +87,6 @@ public class KVStore implements KVCommInterface {
 
 	@Override
 	public KVMessage put(String key, String value) throws Exception {
-		String keyHash;
-		KVMessage response = null;
-		boolean gotRightServer = false;
-
 		if (clientSocket == null) {
 			throw new IllegalArgumentException("Not currently connected to server");
 
@@ -98,51 +94,15 @@ public class KVStore implements KVCommInterface {
 				|| key.trim().contains(" ") || key.trim().contains("\n")) {
 			throw new IllegalArgumentException("Illegal <key> value");
 
-		} else if (value.length() > MAX_VALUE_LENGTH || value.trim().contains("\n")) {
+		} else if (value != null && (value.length() > MAX_VALUE_LENGTH || value.trim().contains("\n"))) {
 			throw new IllegalArgumentException("Illegal <value> value");
 		}
 
-		keyHash = HashUtil.toMD5(key);
-
-		// keep contacting servers until the right one gets hit
-		while (!gotRightServer) {
-
-			// check which server is responsible for the key
-			InetSocketAddress server = serverMetadata.stream()
-					.filter(md -> md.containsHash(keyHash))
-					.findFirst()
-					.map(ServerMetadata::getClientSocketAddress).get();
-
-			// swap servers if necessary
-			if (!server.equals(currentServer)) {
-				// TODO deal with the log messages
-				disconnect();
-				currentServer = server;
-				connect();
-			}
-
-			KVMessage putMessage = new BasicKVMessage(key, value, StatusType.PUT);
-			BasicKVMessage.sendMessage(out, putMessage);
-
-			response = BasicKVMessage.receiveMessage(in);
-			if (response.getStatus() != StatusType.SERVER_NOT_RESPONSIBLE) {
-				gotRightServer = true;
-			} else {
-				// update metadata
-				serverMetadata.clear();
-				serverMetadata.addAll(response.getServerMetadata());
-			}
-		}
-
-		return response;
+		return sendMessage(new BasicKVMessage(key, value, StatusType.PUT));
 	}
 
 	@Override
 	public KVMessage get(String key) throws Exception {
-		String keyHash;
-		KVMessage response = null;
-		boolean gotRightServer = false;
-
 		if (clientSocket == null) {
 			throw new IllegalArgumentException("Not currently connected to server");
 
@@ -151,36 +111,61 @@ public class KVStore implements KVCommInterface {
 			throw new IllegalArgumentException("Illegal <key> value");
 
 		}
+		return sendMessage(new BasicKVMessage(key, null, StatusType.GET));
+	}
 
-		keyHash = HashUtil.toMD5(key);
+	/**
+	 * Sends the specified <code>put</code> or <code>get</code> message to the
+	 * currently connected server, retrying transparently if the wrong server is
+	 * contacted.
+	 * 
+	 * @param message The <code>put</code> or <code>get</code> message to send
+	 * @return The final server response
+	 * @throws Exception If an error occurs during forming the request or
+	 *             communicating with the server
+	 */
+	private KVMessage sendMessage(KVMessage message) throws Exception {
+		String keyHash = HashUtil.toMD5(message.getKey());
+		KVMessage response = null;
+		boolean gotRightServer = false;
 
 		// keep contacting servers until the right one gets hit
 		while (!gotRightServer) {
+			boolean gotServerFromCache = false;
 
-			// check which server is responsible for the key
-			InetSocketAddress server = serverMetadata.stream()
-					.filter(md -> md.containsHash(keyHash))
-					.findFirst()
-					.map(ServerMetadata::getClientSocketAddress).get();
-
-			// swap servers if necessary
-			if (!server.equals(currentServer)) {
-				// TODO deal with the log messages
-				disconnect();
-				currentServer = server;
-				connect();
+			// check if the current server is thought to be able to handle the request
+			if (currentServer.containsHash(keyHash)) {
+				gotServerFromCache = true;
+			} else {
+				// search cache for an appropriate server
+				for (Map.Entry<String, IECSNode> entry : serverMetadata.entrySet()) {
+					IECSNode server = entry.getValue();
+					if (server.containsHash(keyHash)) {
+						// TODO handle the log messages from disconnect() and connect() calls
+						disconnect();
+						currentServer = server;
+						connect();
+						gotServerFromCache = true;
+						break;
+					}
+				}
 			}
 
-			KVMessage getMessage = new BasicKVMessage(key, null, StatusType.GET);
-			BasicKVMessage.sendMessage(out, getMessage);
+			BasicKVMessage.sendMessage(out, message);
 
 			response = BasicKVMessage.receiveMessage(in);
 			if (response.getStatus() != StatusType.SERVER_NOT_RESPONSIBLE) {
 				gotRightServer = true;
 			} else {
-				// update metadata
-				serverMetadata.clear();
-				serverMetadata.addAll(response.getServerMetadata());
+				// cached information for the selected server is stale; purge it from the cache
+				if (gotServerFromCache) {
+					serverMetadata.remove(currentServer.getNodeName());
+				}
+
+				// update metadata for new server
+				IECSNode responsibleServer = response.getResponsibleServer();
+				serverMetadata.put(responsibleServer.getNodeName(), responsibleServer);
+				currentServer = responsibleServer;
 			}
 		}
 

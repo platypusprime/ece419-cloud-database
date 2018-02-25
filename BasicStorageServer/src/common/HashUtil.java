@@ -9,6 +9,12 @@ import java.security.NoSuchAlgorithmException;
  */
 public class HashUtil {
 
+	/** The smallest possible value for a valid MD5 hash. */
+	public static final String MIN_MD5 = "00000000000000000000000000000000";
+
+	/** The largest possible value for a valid MD5 hash. */
+	public static final String MAX_MD5 = "ffffffffffffffffffffffffffffffff";
+
 	/**
 	 * Computes the MD5 hash for a given string.
 	 * 
@@ -42,6 +48,18 @@ public class HashUtil {
 		}
 
 		return sb.toString();
+	}
+
+	/**
+	 * Checks whether the given string is a valid MD5 hash. Specifically checks
+	 * whether the string contains a 32-digit hexadecimal number.
+	 * 
+	 * @param hash The string to check
+	 * @return <code>true</code> if the given string is a 32-digit hexadecimal
+	 *         number, <code>false</code> otherwise
+	 */
+	public static boolean validateHash(String hash) {
+		return hash != null && hash.matches("[0-9a-f]{32}");
 	}
 
 }

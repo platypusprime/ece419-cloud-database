@@ -1,6 +1,6 @@
 package common.messages;
 
-import java.util.Set;
+import ecs.IECSNode;
 
 /**
  * Provides the interface for a network communications message which contains a
@@ -46,8 +46,8 @@ public interface KVMessage {
 	/** The JSON attribute name for the value. */
 	public static final String VALUE_ATTR = "value";
 
-	/** The JSON attribute name for the metadata. */
-	public static final String METADATA_ATTR = "metadata";
+	/** The JSON attribute name for the responsible node. */
+	public static final String RESPONSIBLE_NODE_ATTR = "responsibleNode";
 
 	/**
 	 * Retrieves the key associated with this message.
@@ -76,11 +76,11 @@ public interface KVMessage {
 	public StatusType getStatus();
 
 	/**
-	 * Retrieves the server hash ranges associated with this message.
+	 * Retrieves the responsible server information associated with this message.
 	 * 
-	 * @return A map containing hash ranges mapped to server addresses
+	 * @return The responsible server node
 	 */
-	public default Set<ServerMetadata> getServerMetadata() {
+	public default IECSNode getResponsibleServer() {
 		return null;
 	}
 

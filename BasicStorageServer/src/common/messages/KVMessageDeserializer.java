@@ -1,14 +1,11 @@
 package common.messages;
 
 import static common.messages.KVMessage.KEY_ATTR;
-import static common.messages.KVMessage.METADATA_ATTR;
+import static common.messages.KVMessage.RESPONSIBLE_NODE_ATTR;
 import static common.messages.KVMessage.STATUS_ATTR;
 
 import java.lang.reflect.Type;
-import java.util.HashSet;
-import java.util.Set;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonDeserializationContext;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.JsonElement;
@@ -16,6 +13,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
 
 import common.messages.KVMessage.StatusType;
+import ecs.ECSNode;
+import ecs.IECSNode;
 
 /**
  * A custom JSON deserializer for key-value messages.
@@ -75,25 +74,19 @@ public class KVMessageDeserializer implements JsonDeserializer<KVMessage> {
 	 * 
 	 * @param json The JSON object to deserialize
 	 * @param context The deserialization context to use for deserializing
-	 *            {@link ServerMetadata} objects
+	 *            {@link ECSNode} objects
 	 * @param status The status type associated with the message
 	 * @return A {@link BasicKVMessage} containing the deserialized fields
 	 * @throws JsonParseException If the JSON is not in the expected format
 	 */
 	public KVMessage deserializeMetadataUpdateMessage(JsonObject json, JsonDeserializationContext context,
 			StatusType status) throws JsonParseException {
-		Set<ServerMetadata> metadata = new HashSet<>();
 
-		// extract metadata array
-		if (!json.has(METADATA_ATTR) || !json.get(METADATA_ATTR).isJsonArray())
-			throw new JsonParseException("Missing or malformed metadata array");
-		JsonArray hashRangesArray = json.getAsJsonArray(METADATA_ATTR);
+		if (!json.has(RESPONSIBLE_NODE_ATTR) || !json.get(RESPONSIBLE_NODE_ATTR).isJsonObject())
+			throw new JsonParseException("Missing or malformed responsible node information");
 
-		// add each element in the metadata array as an entry in the hash range table
-		for (JsonElement hashRangeElement : hashRangesArray) {
-			ServerMetadata currentMetadata = context.deserialize(hashRangeElement, ServerMetadata.class);
-			metadata.add(currentMetadata);
-		}
+		JsonElement responsibleNodeElement = json.get(RESPONSIBLE_NODE_ATTR);
+		IECSNode metadata = context.deserialize(responsibleNodeElement, ECSNode.class);
 
 		return new MetadataUpdateMessage(metadata, status);
 	}

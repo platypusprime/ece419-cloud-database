@@ -1,6 +1,6 @@
 package common.messages;
 
-import java.util.Set;
+import ecs.IECSNode;
 
 /**
  * A message for communicating metadata updates.
@@ -13,7 +13,7 @@ public class MetadataUpdateMessage implements KVMessage {
 	 * @param metadata TODO document me
 	 * @param status TODO document me
 	 */
-	public MetadataUpdateMessage(Set<ServerMetadata> metadata, StatusType status) {
+	public MetadataUpdateMessage(IECSNode metadata, StatusType status) {
 		// TODO Auto-generated method stub
 	}
 
@@ -24,13 +24,13 @@ public class MetadataUpdateMessage implements KVMessage {
 	}
 
 	@Override
-	public Set<ServerMetadata> getServerMetadata() {
+	public String toMessageString() {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
 	@Override
-	public String toMessageString() {
+	public IECSNode getResponsibleServer() {
 		// TODO Auto-generated method stub
 		return null;
 	}
