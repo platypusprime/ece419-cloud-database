@@ -32,6 +32,17 @@ public class MigrationTask implements Runnable {
 	
 	private KVPersistenceManager persistenceManager;
 	
+	
+	/**
+	 * Creates a migration task for migrating data to or from another storage server
+	 * 
+	 * @param socket The socket connected to the other storage server
+	 * @param persistenceManager The KVPersistenceManager instance responsible for interacting
+	 *         with disk storage
+	 * @param type The type of the migration operation (i.e. send or receive)
+	 * 
+	 * @return An instance of MigrationTask initialized with the given arguments
+	 */
 	public MigrationTask(Socket socket, KVPersistenceManager persistenceManager, OpType type) {
 		this.type = type;
 		this.socket = socket;
