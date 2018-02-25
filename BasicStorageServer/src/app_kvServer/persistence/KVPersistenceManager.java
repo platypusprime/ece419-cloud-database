@@ -1,5 +1,7 @@
 package app_kvServer.persistence;
 
+import java.util.Map;
+
 /**
  * Provides the basic contract for classes which manipulate key-value based
  * persistences.
@@ -38,5 +40,20 @@ public interface KVPersistenceManager {
 	 * Removes all key-value pairs from the persistence.
 	 */
 	public void clear();
+	
+	/**
+	 * Retrieves all key-value pairs currently in the storage
+	 * 
+	 * @return Map of key-value pairs
+	 */
+	public Map<String, String> getAll();
+	
+	/**
+	 * Inserts all key-value pairs from the given map into the persistent storage
+	 * 
+	 * @return <code>true</code> if all keys were successfully added,
+	 *         <code>false</code> otherwise
+	 */
+	public boolean insertAll(Map<String, String> pairs);
 
 }

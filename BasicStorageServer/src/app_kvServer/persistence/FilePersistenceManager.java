@@ -7,6 +7,9 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.util.Scanner;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.log4j.Logger;
 
@@ -152,6 +155,28 @@ public class FilePersistenceManager implements KVPersistenceManager {
 		return prevValue;
 	}
 	
+	@Override
+	public Map<String, String> getAll() {
+		Map<String, String> pairs = new HashMap<String, String>();
+		log.info("Loading all key values pairs from persistence...");
+
+		try (Scanner scanner = new Scanner(new File(filename), "UTF-8")) {
+			while (scanner.hasNextLine()) {
+				String key = scanner.findInLine("[^ ]+");
+				String value = scanner.findInLine("(?<= )[^\\n]+");
+				
+				pairs.put(key, value);
+				scanner.nextLine();
+			}
+
+		} catch (FileNotFoundException e) {
+			log.error("Persistence file could not be found", e);
+			return null;
+		}
+		
+		return pairs;
+	}
+	
 	private String delete(String key) {
 		String prevValue = null;
 		try (RandomAccessFile r = new RandomAccessFile(filename, "rw");
@@ -202,6 +227,28 @@ public class FilePersistenceManager implements KVPersistenceManager {
 		}
 	}
 
+	@Override
+	public boolean insertAll(Map<String, String> pairs) {
+		try {
+			RandomAccessFile r = new RandomAccessFile(filename, "rw");
+			r.seek(r.length());
+			
+			for (Entry<String, String> entry: pairs.entrySet()) {
+				String key = entry.getKey();
+				String value = entry.getValue();
+				
+				r.write(String.format("%s %s\n", key, value).getBytes("UTF-8"));
+			}
+			r.close();
+			
+		} catch (IOException e) {
+			log.error("I/O exception while writing to persistence file", e);
+			e.printStackTrace();
+			return false;
+		}
+		
+		return true;
+	}
 
 	// TODO move this to unit tests
 	public static void main(String[] args) {

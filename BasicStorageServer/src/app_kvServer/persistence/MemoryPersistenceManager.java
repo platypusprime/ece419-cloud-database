@@ -27,4 +27,16 @@ public class MemoryPersistenceManager implements KVPersistenceManager {
 		data.clear();
 	}
 
+	@Override
+	public Map<String, String> getAll() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public boolean insertAll(Map<String, String> pairs) {
+		// TODO Auto-generated method stub
+		return false;
+	}
+
 }
