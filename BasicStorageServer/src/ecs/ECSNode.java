@@ -19,7 +19,7 @@ public class ECSNode implements IECSNode {
 	private int port;
 	private String start;
 	private String end;
-
+	public boolean busy;
 	/**
 	 * Creates a server metadata object with default range. Contains information
 	 * about both the
@@ -49,6 +49,7 @@ public class ECSNode implements IECSNode {
 		this.name = "Server " + host + ":" + port;
 		this.setStart(start);
 		this.setEnd(end);
+		this.busy = false;
 	}
 
 	@Override
