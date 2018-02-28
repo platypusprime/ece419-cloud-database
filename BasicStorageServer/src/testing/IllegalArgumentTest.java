@@ -1,139 +1,142 @@
 package testing;
 
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
+import app_kvServer.KVServer;
 import client.KVCommInterface;
 import client.KVStore;
-import junit.framework.TestCase;
+import testing.util.ServerTest;
 
-public class IllegalArgumentTest extends TestCase {
+/**
+ * Contains tests for the {@link KVStore} implementation of the
+ * {@link KVCommInterface} interface. Starts a {@link KVServer} instance running
+ * on port 50000 for convenience but should not ever use it.
+ */
+public class IllegalArgumentTest extends ServerTest {
 
+	/** The expected exception used for finer-grained exception testing. */
+	@Rule
+	public ExpectedException thrown = ExpectedException.none();
+
+	/** The client under test. */
 	private KVCommInterface client;
 
-	@Rule public ExpectedException thrown = ExpectedException.none();
-
-	@Override
-	protected void setUp() {
+	/**
+	 * Initializes the communications interface under test and connects it to the
+	 * test server.
+	 * 
+	 * @throws Exception If an exception occurs during client-server connection
+	 */
+	@Before
+	public void setUp() throws Exception {
 		client = new KVStore("localhost", 50000);
-		try {
-			client.connect();
-		} catch (Exception e) {
-
-		}
+		client.connect();
 	}
 
-	@Override
-	protected void tearDown() {
-		try {
-			client.disconnect();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+	/**
+	 * Disconnects the client from the server.
+	 */
+	@After
+	public void tearDown() {
+		client.disconnect();
 	}
 
-	public void testNullKeyPut() {
-
-		Exception ex = null;
-		try {
-			client.put(null, "foo");
-		} catch (Exception e) {
-			ex = e;
-		}
-		assertTrue(ex instanceof IllegalArgumentException);
+	/**
+	 * Tests using a null key in a put operation.
+	 * 
+	 * @throws Exception If an exception occurs during the put operation.
+	 *             Expected to be an {@link IllegalArgumentException}.
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void testNullKeyPut() throws Exception {
+		client.put(null, "foo");
 	}
 
-	public void testEmptyKeyPut() {
-
-		Exception ex = null;
-		try {
-			client.put("", "foo");
-		} catch (Exception e) {
-			ex = e;
-		}
-		assertTrue(ex instanceof IllegalArgumentException);
+	/**
+	 * Test using an empty key in a put operation.
+	 * 
+	 * @throws Exception If an exception occurs during the put operation.
+	 *             Expected to be an {@link IllegalArgumentException}.
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void testEmptyKeyPut() throws Exception {
+		client.put("", "foo");
 	}
 
-	public void testOversizeKeyPut() {
-
-		Exception ex = null;
-
-		try {
-			client.put("01234567890123456789", "foo");
-		} catch (Exception e) {
-			ex = e;
-		}
-		assertNull(ex);
-
-		try {
-			client.put("012345678901234567890", "foo");
-		} catch (Exception e) {
-			ex = e;
-		}
-		assertTrue(ex instanceof IllegalArgumentException);
+	/**
+	 * Test using a key straddling the size limit and one just exceeding it in
+	 * put operations.
+	 * 
+	 * @throws Exception If an exception occurs during either put operation.
+	 *             Expects the 2nd put to throw an {@link IllegalArgumentException}.
+	 */
+	@Test
+	public void testOversizeKeyPut() throws Exception {
+		client.put("01234567890123456789", "foo");
+		thrown.expect(IllegalArgumentException.class);
+		client.put("012345678901234567890", "foo");
 	}
 
-	public void testIllegalCharKeyPut() {
-
-		Exception ex = null;
-		try {
-			client.put("two words", "foo");
-		} catch (Exception e) {
-			ex = e;
-		}
-		assertTrue(ex instanceof IllegalArgumentException);
+	/**
+	 * Test using a key containing internal whitespace in a put operation.
+	 * 
+	 * @throws Exception If an exception occurs during the put operation.
+	 *             Expected to be an {@link IllegalArgumentException}.
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void testIllegalCharKeyPut() throws Exception {
+		client.put("two words", "foo");
 	}
 
-	public void testNullKeyGet() {
-
-		Exception ex = null;
-		try {
-			client.get(null);
-		} catch (Exception e) {
-			ex = e;
-		}
-		assertTrue(ex instanceof IllegalArgumentException);
+	/**
+	 * Test using a null key in a get operation.
+	 * 
+	 * @throws Exception If an exception occurs during the get operation.
+	 *             Expected to be an {@link IllegalArgumentException}.
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void testNullKeyGet() throws Exception {
+		client.get(null);
 	}
 
-	public void testEmptyKeyGet() {
-
-		Exception ex = null;
-		try {
-			client.get("");
-		} catch (Exception e) {
-			ex = e;
-		}
-		assertTrue(ex instanceof IllegalArgumentException);
+	/**
+	 * Test using an empty key in a get operation.
+	 * 
+	 * @throws Exception If an exception occurs during the get operation.
+	 *             Expected to be an {@link IllegalArgumentException}.
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void testEmptyKeyGet() throws Exception {
+		client.get("");
 	}
 
-	public void testOversizeKeyGet() {
-
-		Exception ex = null;
-
-		try {
-			client.get("01234567890123456789");
-		} catch (Exception e) {
-			ex = e;
-		}
-		assertNull(ex);
-
-		try {
-			client.get("012345678901234567890");
-		} catch (Exception e) {
-			ex = e;
-		}
-		assertTrue(ex instanceof IllegalArgumentException);
+	/**
+	 * Test using a key straddling the size limit and one just exceeding it in
+	 * get operations.
+	 * 
+	 * @throws Exception If an exception occurs during either put operation.
+	 *             Expects the 2nd put to throw an {@link IllegalArgumentException}.
+	 */
+	@Test
+	public void testOversizeKeyGet() throws Exception {
+		client.get("01234567890123456789");
+		thrown.expect(IllegalArgumentException.class);
+		client.get("012345678901234567890");
 	}
 
-	public void testIllegalCharKeyGet() {
-
-		Exception ex = null;
-		try {
-			client.get("two words");
-		} catch (Exception e) {
-			ex = e;
-		}
-		assertTrue(ex instanceof IllegalArgumentException);
+	/**
+	 * Test using a key containing internal whitespace in a get operation.
+	 * 
+	 * @throws Exception If an exception occurs during the get operation.
+	 *             Expected to be an {@link IllegalArgumentException}.
+	 */
+	@Test(expected = IllegalArgumentException.class)
+	public void testIllegalCharKeyGet() throws Exception {
+		client.get("two words");
 	}
 
 }
