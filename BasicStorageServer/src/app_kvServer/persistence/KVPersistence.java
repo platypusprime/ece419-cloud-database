@@ -27,6 +27,13 @@ public interface KVPersistence {
 	public String get(String key);
 
 	/**
+	 * Retrieves all key-value pairs currently in the storage
+	 * 
+	 * @return Map of key-value pairs
+	 */
+	public Map<String, String> getAll();
+
+	/**
 	 * Inserts or updates the given key-value pair in the persistence.
 	 * 
 	 * @param key The key to set
@@ -37,23 +44,17 @@ public interface KVPersistence {
 	public String put(String key, String value);
 
 	/**
-	 * Removes all key-value pairs from the persistence.
-	 */
-	public void clear();
-	
-	/**
-	 * Retrieves all key-value pairs currently in the storage
-	 * 
-	 * @return Map of key-value pairs
-	 */
-	public Map<String, String> getAll();
-	
-	/**
 	 * Inserts all key-value pairs from the given map into the persistent storage
 	 * 
+	 * @param pairs The pairs to insert
 	 * @return <code>true</code> if all keys were successfully added,
 	 *         <code>false</code> otherwise
 	 */
 	public boolean insertAll(Map<String, String> pairs);
+
+	/**
+	 * Removes all key-value pairs from the persistence.
+	 */
+	public void clear();
 
 }
