@@ -9,29 +9,29 @@ import org.junit.Before;
 import org.junit.Test;
 
 import app_kvServer.IKVServer.CacheStrategy;
-import app_kvServer.cache.FifoCacheManager;
-import app_kvServer.cache.KVCacheManager;
-import app_kvServer.cache.LruCacheManager;
+import app_kvServer.cache.FifoCache;
+import app_kvServer.cache.KVCache;
+import app_kvServer.cache.LruCache;
 
 /**
  * Tests various cache behaviors using the LRU cache strategy implementation.
  */
-public class LruCacheManagerTest {
+public class LruCacheTest {
 
-	private KVCacheManager cache;
+	private KVCache cache;
 
 	/**
-	 * Sets up the cache manager with a size of 3 before each test.
+	 * Sets up the LRU cache with a size of 3 before each test.
 	 */
 	@Before
 	public void setup() {
-		cache = new LruCacheManager();
+		cache = new LruCache();
 		cache.setCacheSize(3);
 	}
 
 	/**
 	 * Checks that the correct cache strategy is being returned by
-	 * {@link LruCacheManager#getCacheStrategy() getCacheStrategy()}.
+	 * {@link LruCache#getCacheStrategy() getCacheStrategy()}.
 	 */
 	@Test
 	public void testGetCacheStrategy() {
@@ -40,7 +40,7 @@ public class LruCacheManagerTest {
 
 	/**
 	 * Checks that the correct cache capacity is being returned by
-	 * {@link LruCacheManager#getCacheSize() getCacheSize()}.
+	 * {@link LruCache#getCacheSize() getCacheSize()}.
 	 */
 	@Test
 	public void testGetCacheSize() {
@@ -126,7 +126,7 @@ public class LruCacheManagerTest {
 	}
 
 	/**
-	 * Checks that the {@link FifoCacheManager#getCacheSize() setCacheSize()} method
+	 * Checks that the {@link FifoCache#getCacheSize() setCacheSize()} method
 	 * correctly rejects negative values.
 	 */
 	@Test(expected = IllegalArgumentException.class)

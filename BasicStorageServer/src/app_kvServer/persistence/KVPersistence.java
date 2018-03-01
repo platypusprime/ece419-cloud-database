@@ -6,7 +6,7 @@ import java.util.Map;
  * Provides the basic contract for classes which manipulate key-value based
  * persistences.
  */
-public interface KVPersistenceManager {
+public interface KVPersistence {
 
 	/**
 	 * Checks whether the persistence contains the given key.

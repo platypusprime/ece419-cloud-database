@@ -12,7 +12,7 @@ import org.apache.log4j.Logger;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
-import app_kvServer.persistence.KVPersistenceManager;
+import app_kvServer.persistence.KVPersistence;
 
 public class MigrationTask implements Runnable {
 	
@@ -30,7 +30,7 @@ public class MigrationTask implements Runnable {
 
 	private Socket socket;
 	
-	private KVPersistenceManager persistenceManager;
+	private KVPersistence persistenceManager;
 	
 	
 	/**
@@ -40,10 +40,8 @@ public class MigrationTask implements Runnable {
 	 * @param persistenceManager The KVPersistenceManager instance responsible for interacting
 	 *         with disk storage
 	 * @param type The type of the migration operation (i.e. send or receive)
-	 * 
-	 * @return An instance of MigrationTask initialized with the given arguments
 	 */
-	public MigrationTask(Socket socket, KVPersistenceManager persistenceManager, OpType type) {
+	public MigrationTask(Socket socket, KVPersistence persistenceManager, OpType type) {
 		this.type = type;
 		this.socket = socket;
 		this.persistenceManager = persistenceManager;

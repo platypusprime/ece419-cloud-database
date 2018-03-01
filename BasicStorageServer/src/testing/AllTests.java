@@ -3,9 +3,9 @@ package testing;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
-import testing.app_kvServer.cache.FifoCacheManagerTest;
-import testing.app_kvServer.cache.LfuCacheManagerTest;
-import testing.app_kvServer.cache.LruCacheManagerTest;
+import testing.app_kvServer.cache.FifoCacheTest;
+import testing.app_kvServer.cache.LfuCacheTest;
+import testing.app_kvServer.cache.LruCacheTest;
 
 /**
  * An aggregate test suite that runs all tests for the storage server project.
@@ -16,8 +16,8 @@ import testing.app_kvServer.cache.LruCacheManagerTest;
 		InteractionTest.class,
 		IllegalArgumentTest.class,
 		KVClientTest.class,
-		FifoCacheManagerTest.class,
-		LfuCacheManagerTest.class,
-		LruCacheManagerTest.class
+		FifoCacheTest.class,
+		LfuCacheTest.class,
+		LruCacheTest.class
 })
 public class AllTests {}

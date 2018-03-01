@@ -1,9 +1,16 @@
-package app_kvServer.persistence;
+package testing.app_kvServer.persistence;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class MemoryPersistenceManager implements KVPersistenceManager {
+import app_kvServer.persistence.KVPersistence;
+
+/**
+ * This class simulates a key-value persistence layer in memory for testing
+ * purposes. Wraps a {@link HashMap} to handle storage and retrieval of
+ * key-value entries.
+ */
+public class MemoryPersistence implements KVPersistence {
 
 	private Map<String, String> data = new HashMap<>();
 

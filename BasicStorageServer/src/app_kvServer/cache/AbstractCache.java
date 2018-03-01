@@ -6,13 +6,13 @@ import java.util.Map;
 import org.apache.log4j.Logger;
 
 /**
- * Implements common functionality for all cache manager classes. Exposes a
- * contract on which cache manager classes can implement their own replacement
- * strategies.
+ * Provides a general framework on top of which all key-value cache
+ * implementations can be built upon. Exposes a contract on which subclasses can
+ * implement their own replacement strategies.
  */
-public abstract class AbstractCacheManager implements KVCacheManager {
+public abstract class AbstractCache implements KVCache {
 
-	private static Logger log = Logger.getLogger(KVCacheManager.class);
+	private static Logger log = Logger.getLogger(KVCache.class);
 
 	private int capacity = 0;
 	private Map<String, String> data = new HashMap<>();

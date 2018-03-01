@@ -22,34 +22,36 @@ import org.apache.log4j.Logger;
  * <p>
  * TODO make this thread-safe
  */
-public class FilePersistenceManager implements KVPersistenceManager {
+public class FilePersistence implements KVPersistence {
 
 	/** The default filename for persistence files. */
 	public static final String DEFAULT_PERSISTENCE_FILENAME = "persistence.csv";
 
 	/** The logger for this class. */
-	private Logger log = Logger.getLogger(FilePersistenceManager.class);
+	private Logger log = Logger.getLogger(FilePersistence.class);
 
 	/** The path to the file containing the key-value pairs. */
 	private final String filename;
 
 	/**
-	 * Creates a manager for the default persistence file
+	 * Creates a key-value persistence using the default persistence file
 	 * (<code>persistence.csv</code>).
+	 * 
+	 * @deprecated Use {@link FilePersistence#FilePersistence(String)
+	 *             FilePersistence(String)} instead
 	 */
-	
 	@Deprecated
-	public FilePersistenceManager() {
+	public FilePersistence() {
 		this(DEFAULT_PERSISTENCE_FILENAME);
 	}
 
 	/**
-	 * Creates a manager for the specified persistence file. If the file does not
-	 * currently exist, it is created.
+	 * Creates a key-value persistence using the specified persistence file. If the
+	 * file does not currently exist, it is created.
 	 * 
 	 * @param filename The file to load/store KV data
 	 */
-	public FilePersistenceManager(String filename) {
+	public FilePersistence(String filename) {
 		log.info("Creating persistence manager for file: " + filename);
 		this.filename = filename;
 
@@ -252,7 +254,7 @@ public class FilePersistenceManager implements KVPersistenceManager {
 
 	// TODO move this to unit tests
 	public static void main(String[] args) {
-		FilePersistenceManager test = new FilePersistenceManager();
+		FilePersistence test = new FilePersistence();
 		System.out.println(String.format("containsKey(\"kappa\"): %b", test.containsKey("kappa")));
 		System.out.println(String.format("containsKey(\"copy\"): %b", test.containsKey("copy")));
 		System.out.println(String.format("containsKey(\"monkas\"): %b", test.containsKey("monkas")));

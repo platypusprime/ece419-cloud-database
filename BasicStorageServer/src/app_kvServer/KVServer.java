@@ -14,12 +14,12 @@ import java.util.Optional;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import app_kvServer.cache.FifoCacheManager;
-import app_kvServer.cache.KVCacheManager;
-import app_kvServer.cache.LfuCacheManager;
-import app_kvServer.cache.LruCacheManager;
-import app_kvServer.persistence.FilePersistenceManager;
-import app_kvServer.persistence.KVPersistenceManager;
+import app_kvServer.cache.FifoCache;
+import app_kvServer.cache.KVCache;
+import app_kvServer.cache.LfuCache;
+import app_kvServer.cache.LruCache;
+import app_kvServer.persistence.FilePersistence;
+import app_kvServer.persistence.KVPersistence;
 import logger.LogSetup;
 
 /**
@@ -33,8 +33,8 @@ public class KVServer implements IKVServer, Runnable {
 	private static final String SERVER_CONSOLE_PATTERN = "KVServer> %m%n";
 
 	private final int port;
-	private final KVCacheManager cacheManager;
-	private final KVPersistenceManager persistenceManager;
+	private final KVCache cacheManager;
+	private final KVPersistence persistenceManager;
 
 	private ServerSocket serverSocket;
 	private List<ClientConnection> clients = new ArrayList<>(); // TODO handle de-registering clients
@@ -98,13 +98,13 @@ public class KVServer implements IKVServer, Runnable {
 		// set up cache
 		switch (strategy) {
 		case "FIFO":
-			cacheManager = new FifoCacheManager();
+			cacheManager = new FifoCache();
 			break;
 		case "LRU":
-			cacheManager = new LruCacheManager();
+			cacheManager = new LruCache();
 			break;
 		case "LFU":
-			cacheManager = new LfuCacheManager();
+			cacheManager = new LfuCache();
 			break;
 		default:
 			cacheManager = null;
@@ -117,7 +117,7 @@ public class KVServer implements IKVServer, Runnable {
 		// set up storage
 		// TODO: choose a better format for storage file name
 		String storageIdentifier = "Server " + String.valueOf(port) + ".csv";
-		persistenceManager = new FilePersistenceManager(storageIdentifier);
+		persistenceManager = new FilePersistence(storageIdentifier);
 
 		log.info("Created KVServer with "
 				+ "port=" + port + ", "
@@ -209,14 +209,14 @@ public class KVServer implements IKVServer, Runnable {
 	@Override
 	public CacheStrategy getCacheStrategy() {
 		return Optional.ofNullable(cacheManager)
-				.map(KVCacheManager::getCacheStrategy)
+				.map(KVCache::getCacheStrategy)
 				.orElse(CacheStrategy.None);
 	}
 
 	@Override
 	public int getCacheSize() {
 		return Optional.ofNullable(cacheManager)
-				.map(KVCacheManager::getCacheSize)
+				.map(KVCache::getCacheSize)
 				.orElse(0);
 	}
 
@@ -268,7 +268,7 @@ public class KVServer implements IKVServer, Runnable {
 	@Override
 	public synchronized void clearCache() {
 		Optional.ofNullable(cacheManager)
-				.ifPresent(KVCacheManager::clear);
+				.ifPresent(KVCache::clear);
 	}
 
 	@Override
