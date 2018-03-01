@@ -263,23 +263,4 @@ public class FilePersistence implements KVPersistence {
 		}
 	}
 
-	// TODO move this to unit tests
-	public static void main(String[] args) {
-		FilePersistence test = new FilePersistence();
-		System.out.println(String.format("containsKey(\"kappa\"): %b", test.containsKey("kappa")));
-		System.out.println(String.format("containsKey(\"copy\"): %b", test.containsKey("copy")));
-		System.out.println(String.format("containsKey(\"monkas\"): %b", test.containsKey("monkas")));
-		System.out.println();
-		System.out.println(String.format("get(\"kappa\"): \"%s\"", test.get("kappa")));
-		System.out.println(String.format("get(\"copy\"): \"%s\"", test.get("copy")));
-		System.out.println(String.format("get(\"monkas\"): \"%s\"", test.get("monkas")));
-		System.out.println();
-		System.out.println(String.format("test.put(\"newkey\", \"newval\"): \"%s\"", test.put("newkey", "newval")));
-		System.out.println(String.format("test.put(\"newkey\", \"newerval\"): \"%s\"", test.put("newkey", "newerval")));
-		System.out.println(String.format("test.put(\"anotherKey\", \"anotherVal\"): \"%s\"",
-				test.put("anotherKey", "anotherVal")));
-		System.out.println(String.format("test.put(\"newkey\", \"val\"): \"%s\"", test.put("newkey", "val")));
-		System.out.println(String.format("test.put(\"newkey\", null): \"%s\"", test.put("newkey", null)));
-		System.out.println(String.format("test.put(\"newkey\", null): \"%s\"", test.put("foobar", null)));
-	}
 }
