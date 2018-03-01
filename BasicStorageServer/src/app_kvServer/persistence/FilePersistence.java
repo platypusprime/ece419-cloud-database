@@ -27,6 +27,10 @@ public class FilePersistence implements KVPersistence {
 	/** The default filename for persistence files. */
 	public static final String DEFAULT_PERSISTENCE_FILENAME = "persistence.csv";
 
+	/** Naming information for the scratch file used in write operations */
+	private static final String SCRATCH_FILE_PREFIX = "ece419-put-buffer";
+	private static final String SCRATCH_FILE_SUFFIX = ".csv";
+
 	/** The logger for this class. */
 	private Logger log = Logger.getLogger(FilePersistence.class);
 
@@ -86,6 +90,18 @@ public class FilePersistence implements KVPersistence {
 		}
 	}
 
+	/**
+	 * Creates a scratch file in the default temporary files directory.
+	 * 
+	 * @return A file object pointing to the newly created scratch file
+	 * @throws IOException If the file could not be created
+	 */
+	private File generateScratchFile() throws IOException {
+		File tempFile = File.createTempFile(SCRATCH_FILE_PREFIX, SCRATCH_FILE_SUFFIX);
+		tempFile.deleteOnExit();
+		return tempFile;
+	}
+
 	@Override
 	public String get(String key) {
 		log.info("Looking up key '" + key + "' in persistence...");
@@ -118,7 +134,7 @@ public class FilePersistence implements KVPersistence {
 		
 		String prevValue = null;
 		try (RandomAccessFile r = new RandomAccessFile(filename, "rw");
-				RandomAccessFile rtemp = new RandomAccessFile("put.temp", "rw");
+				RandomAccessFile rtemp = new RandomAccessFile(generateScratchFile(), "rw");
 				FileChannel sourceChannel = r.getChannel();
 				FileChannel targetChannel = rtemp.getChannel()) {
 			long fileSize = r.length();
@@ -151,9 +167,6 @@ public class FilePersistence implements KVPersistence {
 			log.error("I/O exception while writing to persistence file", e);
 		}
 
-		// delete temporary file
-		new File("put.temp").delete();
-
 		return prevValue;
 	}
 	
@@ -182,7 +195,7 @@ public class FilePersistence implements KVPersistence {
 	private String delete(String key) {
 		String prevValue = null;
 		try (RandomAccessFile r = new RandomAccessFile(filename, "rw");
-				RandomAccessFile rtemp = new RandomAccessFile("put.temp", "rw");
+				RandomAccessFile rtemp = new RandomAccessFile(generateScratchFile(), "rw");
 				FileChannel sourceChannel = r.getChannel();
 				FileChannel targetChannel = rtemp.getChannel()) {
 			long fileSize = r.length();
