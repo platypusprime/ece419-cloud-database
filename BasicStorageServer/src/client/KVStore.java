@@ -87,31 +87,66 @@ public class KVStore implements KVCommInterface {
 
 	@Override
 	public KVMessage put(String key, String value) throws Exception {
-		if (clientSocket == null) {
-			throw new IllegalArgumentException("Not currently connected to server");
+		if (clientSocket == null)
+			throw new IllegalStateException("Not currently connected to server");
 
-		} else if (key == null || key.isEmpty() || key.length() > MAX_KEY_LENGTH
-				|| key.trim().contains(" ") || key.trim().contains("\n")) {
-			throw new IllegalArgumentException("Illegal <key> value");
-
-		} else if (value != null && (value.length() > MAX_VALUE_LENGTH || value.trim().contains("\n"))) {
-			throw new IllegalArgumentException("Illegal <value> value");
-		}
-
+		validateKey(key);
+		validateValue(value);
 		return sendMessage(new BasicKVMessage(key, value, StatusType.PUT));
 	}
 
 	@Override
 	public KVMessage get(String key) throws Exception {
-		if (clientSocket == null) {
-			throw new IllegalArgumentException("Not currently connected to server");
+		if (clientSocket == null)
+			throw new IllegalStateException("Not currently connected to server");
 
-		} else if (key == null || key.isEmpty() || key.length() > MAX_KEY_LENGTH
-				|| key.trim().contains(" ") || key.trim().contains("\n")) {
-			throw new IllegalArgumentException("Illegal <key> value");
-
-		}
+		validateKey(key);
 		return sendMessage(new BasicKVMessage(key, null, StatusType.GET));
+	}
+
+	/**
+	 * Checks whether the given string satisfies the KV server key requirements.
+	 * 
+	 * @param key The key to check
+	 * @throws IllegalArgumentException if the key:
+	 *             <ul>
+	 *             <li>is <code>null</code> or empty</li>
+	 *             <li>exceeds the maximum key length</li>
+	 *             <li>contains illegal characters</li>
+	 *             </ul>
+	 */
+	public static void validateKey(String key) throws IllegalArgumentException {
+		if (key == null || key.isEmpty())
+			throw new IllegalArgumentException("Null or missing key");
+
+		if (key.length() > MAX_KEY_LENGTH)
+			throw new IllegalArgumentException("Key exceeds the maximum length");
+
+		String keyTrim = key.trim();
+		if (keyTrim.contains(" ") || keyTrim.contains("\n"))
+			throw new IllegalArgumentException("Key contains illegal whitespace (space or newline)");
+	}
+
+	/**
+	 * Checks whether the given string satisfies the KV server value requirements.
+	 * 
+	 * @param value The value to check
+	 * @throws IllegalArgumentException if the value:
+	 *             <ul>
+	 *             <li>exceeds the maximum value length</li>
+	 *             <li>contains illegal characters</li>
+	 *             </ul>
+	 */
+	public static void validateValue(String value) throws IllegalArgumentException {
+		// allow null values for deletion purposes
+		if (value == null || value.isEmpty())
+			return;
+
+		if (value.length() > MAX_VALUE_LENGTH)
+			throw new IllegalArgumentException("Value exceeds the maximum length");
+
+		if (value.trim().contains("\n"))
+			throw new IllegalArgumentException("Value contains illegal whitespace (newline)");
 	}
 
 	/**
