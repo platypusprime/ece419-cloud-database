@@ -24,12 +24,6 @@ public class MetadataUpdateMessage implements KVMessage {
 	}
 
 	@Override
-	public String toMessageString() {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
 	public IECSNode getResponsibleServer() {
 		// TODO Auto-generated method stub
 		return null;

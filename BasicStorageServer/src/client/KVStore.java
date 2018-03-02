@@ -186,7 +186,7 @@ public class KVStore implements KVCommInterface {
 				}
 			}
 
-			BasicKVMessage.sendMessage(out, message);
+			streamUtil.sendMessage(out, message);
 
 			response = BasicKVMessage.receiveMessage(in);
 			if (response.getStatus() != StatusType.SERVER_NOT_RESPONSIBLE) {

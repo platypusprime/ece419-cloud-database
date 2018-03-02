@@ -10,6 +10,7 @@ import org.apache.log4j.Logger;
 import common.messages.BasicKVMessage;
 import common.messages.KVMessage;
 import common.messages.KVMessage.StatusType;
+import common.messages.StreamUtil;
 
 /**
  * The class oversees a single server-side client connection session. When run
@@ -22,6 +23,7 @@ public class ClientConnection implements Runnable {
 
 	private Socket clientSocket;
 	private final KVServer server;
+	private final StreamUtil streamUtil;
 
 	private boolean isOpen;
 
@@ -36,6 +38,7 @@ public class ClientConnection implements Runnable {
 	public ClientConnection(Socket clientSocket, KVServer server) {
 		this.clientSocket = clientSocket;
 		this.server = server;
+		this.streamUtil = new StreamUtil();
 	}
 
 	/**
@@ -53,7 +56,10 @@ public class ClientConnection implements Runnable {
 				KVMessage request = null;
 				try {
 					log.info("Listening for client messages");
-					request = BasicKVMessage.receiveMessage(in);
+					String inStr = streamUtil.receiveString(in);
+					// TODO validate message type
+					// String msgType = streamUtil.identifyMessageType(inStr);
+					request = streamUtil.deserializeKVMessage(inStr);
 				} catch (IOException e) {
 					log.error("Error! Connection lost!", e);
 					isOpen = false;
@@ -112,7 +118,7 @@ public class ClientConnection implements Runnable {
 					break;
 				}
 				KVMessage outMsg = new BasicKVMessage(outKey, outValue, outStatus);
-				BasicKVMessage.sendMessage(out, outMsg);
+				streamUtil.sendMessage(out, outMsg);
 
 				/*
 				 * connection either terminated by the client or lost due to network problems

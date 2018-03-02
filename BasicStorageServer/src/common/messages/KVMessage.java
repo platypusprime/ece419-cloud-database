@@ -84,11 +84,4 @@ public interface KVMessage {
 		return null;
 	}
 
-	/**
-	 * Serializes this KV message as a simple string.
-	 * 
-	 * @return The serialized message string
-	 */
-	public String toMessageString();
-
 }

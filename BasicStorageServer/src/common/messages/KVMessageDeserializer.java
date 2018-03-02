@@ -3,6 +3,7 @@ package common.messages;
 import static common.messages.KVMessage.KEY_ATTR;
 import static common.messages.KVMessage.RESPONSIBLE_NODE_ATTR;
 import static common.messages.KVMessage.STATUS_ATTR;
+import static common.messages.KVMessage.VALUE_ATTR;
 
 import java.lang.reflect.Type;
 
@@ -63,8 +64,8 @@ public class KVMessageDeserializer implements JsonDeserializer<KVMessage> {
 			key = json.getAsJsonPrimitive(KEY_ATTR).getAsString();
 
 		// parse value
-		if (json.has(KEY_ATTR) && json.get(KEY_ATTR).isJsonPrimitive())
-			value = json.getAsJsonPrimitive(KEY_ATTR).getAsString();
+		if (json.has(VALUE_ATTR) && json.get(VALUE_ATTR).isJsonPrimitive())
+			value = json.getAsJsonPrimitive(VALUE_ATTR).getAsString();
 
 		return new BasicKVMessage(key, value, status);
 	}
