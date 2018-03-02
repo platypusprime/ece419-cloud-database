@@ -27,7 +27,7 @@ public class ZKManager implements IZKManager {
     private void initialize() {
         try {
             zkConnection = new ZKConnection();
-            zkeeper = zkConnection.connect("localhost");
+            zkeeper = zkConnection.connect("127.0.0.1:2181");
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -80,6 +80,7 @@ public class ZKManager implements IZKManager {
                     ZKWatcher watch = new ZKWatcher();
                     b = zkeeper.getData(path, watch,null);
                     watch.await();
+                    b = zkeeper.getData(path, null,null);
                 }else{
                     b = zkeeper.getData(path, null,null);
                 }

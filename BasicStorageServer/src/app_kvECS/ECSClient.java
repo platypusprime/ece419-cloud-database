@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import ecs.ECSNode;
 import ecs.IECSNode;
@@ -13,21 +14,26 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import logger.LogSetup;
-import java.math.BigInteger;
 import java.io.IOException;
 import common.HashUtil;
 import app_kvECS.ZKManager;
 import org.apache.zookeeper.data.Stat;
 import org.apache.zookeeper.KeeperException;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 public class ECSClient implements IECSClient {
 
+    private static final Logger log = Logger.getLogger(ECSClient.class);
+    private static final String PROMPT = "kvECS> ";
+    private static final String CONSOLE_PATTERN = PROMPT + "%m%n";
+
     private List<ECSNode> serverPool;
-//    private ArrayList<ECSNode> activeServerPool;
     private int serverPoolCount;
     private int activeServerPoolCount;
     private static ZKManager zkManager;
 
     public ECSClient(String fileName){
+        log.info("initialization started...");
         File file = new File(fileName);
         try( FileReader fileReader = new FileReader(file);
              BufferedReader bufferedReader = new BufferedReader(fileReader);)
@@ -46,37 +52,27 @@ public class ECSClient implements IECSClient {
                 String start = HashUtil.toMD5(ip.concat(":").concat(Integer.toString(port)));
                 ECSNode node = new ECSNode(ip, port, start, HashUtil.MIN_MD5);
                 serverPool.add(node);
-                System.out.println(serverPool.get(i).getNodeName());
-                System.out.println(serverPool.get(i).getNodeHost());
-                System.out.println(serverPool.get(i).getNodePort());
                 i = i + 1;
             }
 
             this.serverPoolCount = i;
             Collections.sort(serverPool, new Comparator<ECSNode>(){
                 public int compare(ECSNode node1, ECSNode node2){
-//                    BigInteger bi1 = new BigInteger(node1.getStart(), 16);
-//                    BigInteger bi2 = new BigInteger(node2.getStart(), 16);
                     return node1.getStart().compareTo(node2.getStart());
                 }
             });
-            for (int j = 0; j < i; j++) {
-//                System.out.println(item.getNodeName());
-//                System.out.println(item.getNodeHost());
-//                System.out.println(item.getNodePort());
-                if(j == (i-1)){
-                    serverPool.get(j).setEnd(serverPool.get(0).getStart());
-                }
-                else{
-                    serverPool.get(j).setEnd(serverPool.get(j+1).getStart());
-                }
+            for (int j = 0; j < i-1; j++) {
+                serverPool.get(j).setEnd(serverPool.get(j+1).getStart());
                 System.out.println(serverPool.get(j).getStart() + " to " + serverPool.get(j).getEnd());
             }
+            serverPool.get(serverPoolCount-1).setEnd(serverPool.get(0).getStart());
+            System.out.println(serverPool.get(serverPoolCount-1).getStart() + " to " + serverPool.get(serverPoolCount-1).getEnd());
             zkManager = new ZKManager();
         }
         catch (IOException e) {
-            System.out.println("Error! Unable to open file!");
+            log.fatal("Error! Unable to open file!",e);
         }
+        log.info("initialization done...");
 
     }
 
@@ -93,21 +89,46 @@ public class ECSClient implements IECSClient {
             System.out.println("Command sent to KVServer...");
 
         } catch (Exception ex) {
-            ex.printStackTrace();
+            log.fatal("Unable to execute command",ex);
         }
 
     }
 
     @Override
     public boolean start() {
-        // TODO
-        return false;
+        log.info("STARTING ALL SERVERS...");
+        for (int i = 0; i < serverPoolCount; i++) {
+            if (serverPool.get(i).busy == true) {
+                String path = "/" + serverPool.get(i).getNodeName();
+                byte[] data = ("STATE:START HSTART:" +
+                        serverPool.get(i).getStart() + " HEND:" + serverPool.get(i).getEnd()).getBytes();
+                try {
+                    zkManager.update(path, data);
+                }
+                catch(KeeperException | InterruptedException e){
+                    log.warn(e.getMessage());
+                }
+            }
+        }
+        return true;
     }
 
     @Override
     public boolean stop() {
-        // TODO
-        return false;
+        log.info("STOPPING ALL SERVERS...");
+        for (int i = 0; i < serverPoolCount; i++) {
+            if (serverPool.get(i).busy == true) {
+                String path = "/" + serverPool.get(i).getNodeName();
+                byte[] data = ("STATE:STOP".getBytes());
+                try {
+                    zkManager.update(path, data);
+                }
+                catch(KeeperException | InterruptedException e){
+                    log.warn(e.getMessage());
+                }
+            }
+        }
+        return true;
     }
 
     @Override
@@ -130,18 +151,20 @@ public class ECSClient implements IECSClient {
                 for(int j = 1; j < serverPoolCount; j++){
                     if(serverPool.get((i+j) % serverPoolCount).busy == true) {
                         serverPool.get(i).setEnd(serverPool.get((i+j) % serverPoolCount).getStart());
+                        break;
                     }
                 }
                 for(int j = 1; j < serverPoolCount; j++){
-                    int modPosition = (i*2-j) % serverPoolCount;
+                    int modPosition = (i + serverPoolCount - j) % serverPoolCount;
                     if(serverPool.get(modPosition).busy == true) {
                         serverPool.get(modPosition).setEnd(serverPool.get(i).getStart());
-                        String path = serverPool.get(modPosition).getNodeName();
+                        String path = "/" + serverPool.get(modPosition).getNodeName();
                         data = ("STATE:MOVEDATA" + " HSTART:" + serverPool.get(i).getStart() + " IP:"
                                 + serverPool.get(i).getNodeHost()).getBytes();
                         try {
                             zkManager.update(path, data);
-                            String response = zkManager.getZNodeData(path, false);
+                            System.out.println("Waiting for server to movedata...");
+                            String response = zkManager.getZNodeData(path, true);
                             if (response.equals("SUCCESS")) {
                                 data = ("STATE:UPDATE" + " HSTART:" + serverPool.get((i * 2 - j) % serverPoolCount).getStart()
                                         + " HEND:" + serverPool.get((i * 2 - j) % serverPoolCount).getEnd()).getBytes();
@@ -151,6 +174,7 @@ public class ECSClient implements IECSClient {
                         catch(KeeperException | InterruptedException e){
                             System.out.println(e.getMessage());
                         }
+                        break;
                     }
                 }
 
@@ -159,8 +183,6 @@ public class ECSClient implements IECSClient {
                         + serverPool.get(i).getEnd()).getBytes();
                 try {
                     zkManager.create(path, data);
-                    Stat stat = zkManager.getZNodeStats(path);
-                    System.out.println("ZNode Stat: " + stat.toString());
                 }
                 catch(KeeperException | InterruptedException e){
                     System.out.println(e.getMessage());
@@ -186,6 +208,7 @@ public class ECSClient implements IECSClient {
                     serverPool.get(j).busy = true;
                     activeServerPoolCount += 1;
                     activePool.add(serverPool.get(j));
+                    break;
                 }
             }
         }
@@ -195,8 +218,14 @@ public class ECSClient implements IECSClient {
                 for(int j = 1; j < serverPoolCount; j++){
                     if(serverPool.get((i+j) % serverPoolCount).busy == true) {
                         serverPool.get(i).setEnd(serverPool.get((i+j) % serverPoolCount).getStart());
+                        break;
                     }
                 }
+            }
+        }
+        for(int i = 0; i < serverPoolCount; i++){
+            if(serverPool.get(i).busy == true) {
+                System.out.println("active server " + Integer.toString(i) + ": "+ serverPool.get(i).getStart() + " to " + serverPool.get(i).getEnd());
             }
         }
         setupNodes(count, cacheStrategy, cacheSize);
@@ -214,13 +243,12 @@ public class ECSClient implements IECSClient {
                 try {
                     zkManager.create(path, data);
                     Stat stat = zkManager.getZNodeStats(path);
-                    System.out.println("ZNode Stat: " + stat.toString());
+                    String getData = zkManager.getZNodeData(path, false);
                 }
                 catch(KeeperException | InterruptedException e){
                     System.out.println(e.getMessage());
                 }
                 initializeKVServer(serverPool.get(i));
-                return null;
             }
         }
         return null;
@@ -234,28 +262,52 @@ public class ECSClient implements IECSClient {
 
     @Override
     public boolean removeNodes(Collection<String> nodeNames) {
+        String path;
         for(String node:nodeNames){
             for (int i = 0; i < serverPoolCount; i++) {
                 if(serverPool.get(i).getNodeName().equals(node))
                 {
+                    serverPool.get(i).busy = false;
+                    activeServerPoolCount -= 1;
+                    serverPool.get(i).setEnd(serverPool.get((i+1) % serverPoolCount).getStart());
+
+                    if(activeServerPoolCount == 0){
+                        try
+                        {
+                            path = "/" + serverPool.get(i).getNodeName();
+                            zkManager.delete(path);
+                            log.info("server: " + serverPool.get(i).getNodeName() + " got removed, last server!! active: " + Integer.toString(activeServerPoolCount));
+                        } catch (KeeperException | InterruptedException e) {
+                            log.warn(e.getMessage());
+                        }
+                    }
                     for(int j = 1; j < serverPoolCount; j++)
                     {
-                        int modPosition = (i*2-j) % serverPoolCount;
+                        int modPosition = (i + serverPoolCount - j) % serverPoolCount;
                         if(serverPool.get(modPosition).busy == true)
                         {
                             for(int k = 1; k < serverPoolCount; k++) {
                                 if (serverPool.get((i + k) % serverPoolCount).busy == true) {
                                     serverPool.get(modPosition).setEnd(serverPool.get((i + k) % serverPoolCount).getStart());
-                                    String path = serverPool.get(modPosition).getNodeName();
-                                    byte[] data = ("STATE:UPDATE" + " HSTART:" + serverPool.get((i * 2 - j) % serverPoolCount).getStart()
-                                            + " HEND:" + serverPool.get((i * 2 - j) % serverPoolCount).getEnd()).getBytes();
+                                    path = "/" + serverPool.get(modPosition).getNodeName();
+                                    System.out.println("notitying node: " + path);
+                                    byte[] data = ("STATE:UPDATE" + " HSTART:" + serverPool.get(modPosition).getStart()
+                                            + " HEND:" + serverPool.get(modPosition).getEnd()).getBytes();
                                     try {
                                         zkManager.update(path, data);
+                                        String response = zkManager.getZNodeData(path, true);
+                                        if (response.equals("SUCCESS")) {
+                                            path = "/" + serverPool.get(i).getNodeName();
+                                            zkManager.delete(path);
+                                        }
                                     } catch (KeeperException | InterruptedException e) {
                                         System.out.println(e.getMessage());
                                     }
+                                    break;
                                 }
                             }
+                            log.info("server: " + serverPool.get(i).getNodeName() + " got removed, remaining servers: " + Integer.toString(activeServerPoolCount));
+                            break;
                         }
                     }
                 }
@@ -281,8 +333,22 @@ public class ECSClient implements IECSClient {
             System.out.println("Error! Invalid number of arguments!");
             System.out.println("Usage: Config File <name>");
         } else {
+            try {
+                LogSetup.initialize("logs/ecs.log", Level.INFO, CONSOLE_PATTERN);
+            } catch (IOException e) {
+                System.out.println("ERROR: unable to initialize logger");
+                e.printStackTrace();
+                System.exit(1);
+            }
             ECSClient clientApplication = new ECSClient(args[0]);
+            clientApplication.addNodes(5, "FIFO",200);
             clientApplication.addNode("FIFO", 200);
+            clientApplication.start();
+            clientApplication.removeNodes(new ArrayList<String>(
+                    Arrays.asList("Server 127.0.0.1:50000", "Server 127.0.0.1:50002","Server 127.0.0.1:50007",
+                            "Server 127.0.0.1:50006", "Server 127.0.0.1:50005", "Server 127.0.0.1:50003")));
+
+
         }
     }
 }

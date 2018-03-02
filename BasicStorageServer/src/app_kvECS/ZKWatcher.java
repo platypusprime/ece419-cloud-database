@@ -27,6 +27,7 @@ public class ZKWatcher implements Watcher, StatCallback {
     public void process(WatchedEvent event) {
         System.out.println("Watcher fired on path: " + event.getPath() + " state: " +
                 event.getState() + " type " + event.getType());
+
         latch.countDown();
     }
 
