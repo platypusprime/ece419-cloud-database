@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.apache.log4j.Logger;
 
@@ -13,6 +11,7 @@ import common.HashUtil;
 import common.messages.BasicKVMessage;
 import common.messages.KVMessage;
 import common.messages.KVMessage.StatusType;
+import common.messages.StreamUtil;
 import ecs.ECSNode;
 import ecs.IECSNode;
 
@@ -31,8 +30,10 @@ public class KVStore implements KVCommInterface {
 	private InputStream in;
 
 	private IECSNode currentServer;
-	private final Map<String, IECSNode> serverMetadata;
 	private boolean isConnected;
+
+	private final ServerMetadataCache mdCache;
+	private final StreamUtil streamUtil;
 
 	/**
 	 * Initialize KVStore with address and port of KVServer
@@ -42,8 +43,10 @@ public class KVStore implements KVCommInterface {
 	 */
 	public KVStore(String address, int port) {
 		this.currentServer = new ECSNode(address, port);
-		this.serverMetadata = new HashMap<>();
+		this.mdCache = new ServerMetadataCache();
+		mdCache.updateServer(currentServer);
 		this.isConnected = false;
+		this.streamUtil = new StreamUtil();
 	}
 
 	@Override
@@ -161,6 +164,7 @@ public class KVStore implements KVCommInterface {
 	 */
 	private KVMessage sendMessage(KVMessage message) throws Exception {
 		String keyHash = HashUtil.toMD5(message.getKey());
+		String responseStr;
 		KVMessage response = null;
 		boolean gotRightServer = false;
 
@@ -171,36 +175,40 @@ public class KVStore implements KVCommInterface {
 			// check if the current server is thought to be able to handle the request
 			if (currentServer.containsHash(keyHash)) {
 				gotServerFromCache = true;
+
 			} else {
-				// search cache for an appropriate server
-				for (Map.Entry<String, IECSNode> entry : serverMetadata.entrySet()) {
-					IECSNode server = entry.getValue();
-					if (server.containsHash(keyHash)) {
-						// TODO handle the log messages from disconnect() and connect() calls
-						disconnect();
-						currentServer = server;
-						connect();
-						gotServerFromCache = true;
-						break;
-					}
+				IECSNode serverFromCache = mdCache.findServer(keyHash);
+				if (serverFromCache != null) {
+					disconnect();
+					currentServer = serverFromCache;
+					connect();
+					gotServerFromCache = true;
 				}
 			}
 
+			// TODO handle case where server rejects request
 			streamUtil.sendMessage(out, message);
 
-			response = BasicKVMessage.receiveMessage(in);
-			if (response.getStatus() != StatusType.SERVER_NOT_RESPONSIBLE) {
-				gotRightServer = true;
-			} else {
+			responseStr = streamUtil.receiveString(in);
+			response = streamUtil.deserializeKVMessage(responseStr);
+
+			if (response.getStatus() == StatusType.SERVER_NOT_RESPONSIBLE) {
 				// cached information for the selected server is stale; purge it from the cache
 				if (gotServerFromCache) {
-					serverMetadata.remove(currentServer.getNodeName());
+					mdCache.invalidateServer(currentServer);
 				}
 
 				// update metadata for new server
 				IECSNode responsibleServer = response.getResponsibleServer();
-				serverMetadata.put(responsibleServer.getNodeName(), responsibleServer);
+				mdCache.updateServer(responsibleServer);
 				currentServer = responsibleServer;
+
+			} else if (response.getStatus() == StatusType.SERVER_STOPPED) {
+				// no matter where the information came from, needs to be purged
+				mdCache.invalidateServer(currentServer);
+
+			} else {
+				gotRightServer = true;
 			}
 		}
 
