@@ -21,17 +21,18 @@ import org.apache.zookeeper.data.Stat;
 import org.apache.zookeeper.KeeperException;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import common.messages.KVMessage.StatusType;
 public class ECSClient implements IECSClient {
 
     private static final Logger log = Logger.getLogger(ECSClient.class);
     private static final String PROMPT = "kvECS> ";
     private static final String CONSOLE_PATTERN = PROMPT + "%m%n";
-
+    private static String path = "/serverMetaData";
     private List<ECSNode> serverPool;
     private int serverPoolCount;
     private int activeServerPoolCount;
     private static ZKManager zkManager;
-
+    private static MetadataUpdateMessage metaDataTable;
     public ECSClient(String fileName){
         log.info("initialization started...");
         File file = new File(fileName);
@@ -68,6 +69,7 @@ public class ECSClient implements IECSClient {
             serverPool.get(serverPoolCount-1).setEnd(serverPool.get(0).getStart());
             System.out.println(serverPool.get(serverPoolCount-1).getStart() + " to " + serverPool.get(serverPoolCount-1).getEnd());
             zkManager = new ZKManager();
+            metaDataTable = new MetadataUpdateMessage();
         }
         catch (IOException e) {
             log.fatal("Error! Unable to open file!",e);
@@ -99,11 +101,11 @@ public class ECSClient implements IECSClient {
         log.info("STARTING ALL SERVERS...");
         for (int i = 0; i < serverPoolCount; i++) {
             if (serverPool.get(i).busy == true) {
-                String path = "/" + serverPool.get(i).getNodeName();
-                byte[] data = ("STATE:START HSTART:" +
-                        serverPool.get(i).getStart() + " HEND:" + serverPool.get(i).getEnd()).getBytes();
+                metaDataTable.modifyNode(serverPool.get(i), StatusType.START);
+                byte[] data = metaDataTable.toMessageString().getBytes();
                 try {
                     zkManager.update(path, data);
+                    String getData = zkManager.getZNodeData(path, false);
                 }
                 catch(KeeperException | InterruptedException e){
                     log.warn(e.getMessage());
@@ -118,8 +120,8 @@ public class ECSClient implements IECSClient {
         log.info("STOPPING ALL SERVERS...");
         for (int i = 0; i < serverPoolCount; i++) {
             if (serverPool.get(i).busy == true) {
-                String path = "/" + serverPool.get(i).getNodeName();
-                byte[] data = ("STATE:STOP".getBytes());
+                metaDataTable.modifyNode(serverPool.get(i), StatusType.STOP);
+                byte[] data = metaDataTable.toMessageString().getBytes();
                 try {
                     zkManager.update(path, data);
                 }
@@ -133,8 +135,21 @@ public class ECSClient implements IECSClient {
 
     @Override
     public boolean shutdown() {
-        // TODO
-        return false;
+        log.info("SHUTTING DOWN ALL SERVERS...");
+        for (int i = 0; i < serverPoolCount; i++) {
+            if (serverPool.get(i).busy == true) {
+                metaDataTable.modifyNode(serverPool.get(i), StatusType.SHUTDOWN);
+                byte[] data = metaDataTable.toMessageString().getBytes();
+                try {
+                    zkManager.update(path, data);
+                    String getData = zkManager.getZNodeData(path, false);
+                }
+                catch(KeeperException | InterruptedException e){
+                    log.warn(e.getMessage());
+                }
+            }
+        }
+        return true;
     }
 
     @Override
@@ -151,6 +166,7 @@ public class ECSClient implements IECSClient {
                 for(int j = 1; j < serverPoolCount; j++){
                     if(serverPool.get((i+j) % serverPoolCount).busy == true) {
                         serverPool.get(i).setEnd(serverPool.get((i+j) % serverPoolCount).getStart());
+                        metaDataTable.addNode(serverPool.get(i), StatusType.START, cacheStrategy, Integer.toString(cacheSize));
                         break;
                     }
                 }
@@ -158,18 +174,10 @@ public class ECSClient implements IECSClient {
                     int modPosition = (i + serverPoolCount - j) % serverPoolCount;
                     if(serverPool.get(modPosition).busy == true) {
                         serverPool.get(modPosition).setEnd(serverPool.get(i).getStart());
-                        String path = "/" + serverPool.get(modPosition).getNodeName();
-                        data = ("STATE:MOVEDATA" + " HSTART:" + serverPool.get(i).getStart() + " IP:"
-                                + serverPool.get(i).getNodeHost()).getBytes();
+                        metaDataTable.modifyNode(serverPool.get(modPosition), StatusType.START);
+                        data = metaDataTable.toMessageString().getBytes();
                         try {
                             zkManager.update(path, data);
-                            System.out.println("Waiting for server to movedata...");
-                            String response = zkManager.getZNodeData(path, true);
-                            if (response.equals("SUCCESS")) {
-                                data = ("STATE:UPDATE" + " HSTART:" + serverPool.get((i * 2 - j) % serverPoolCount).getStart()
-                                        + " HEND:" + serverPool.get((i * 2 - j) % serverPoolCount).getEnd()).getBytes();
-                                zkManager.update(path, data);
-                            }
                         }
                         catch(KeeperException | InterruptedException e){
                             System.out.println(e.getMessage());
@@ -178,15 +186,6 @@ public class ECSClient implements IECSClient {
                     }
                 }
 
-                String path = "/" + serverPool.get(i).getNodeName();
-                data = ("STATE:UPDATE" + " HSTART:" + serverPool.get(i).getStart() + " HEND:"
-                        + serverPool.get(i).getEnd()).getBytes();
-                try {
-                    zkManager.create(path, data);
-                }
-                catch(KeeperException | InterruptedException e){
-                    System.out.println(e.getMessage());
-                }
                 initializeKVServer(serverPool.get(i));
                 return serverPool.get(i);
             }
@@ -234,22 +233,21 @@ public class ECSClient implements IECSClient {
 
     @Override
     public Collection<IECSNode> setupNodes(int count, String cacheStrategy, int cacheSize) {
-        // ZNode Path
+
         for (int i = 0; i < serverPoolCount; i++) {
             if (serverPool.get(i).busy == true) {
-                String path = "/" + serverPool.get(i).getNodeName();
-                byte[] data = ("STATE:INIT CACHE:" + cacheStrategy + " CACHESIZE:" + cacheSize + " HSTART:" +
-                        serverPool.get(i).getStart() + " HEND:" + serverPool.get(i).getEnd()).getBytes();
-                try {
-                    zkManager.create(path, data);
-                    Stat stat = zkManager.getZNodeStats(path);
-                    String getData = zkManager.getZNodeData(path, false);
-                }
-                catch(KeeperException | InterruptedException e){
-                    System.out.println(e.getMessage());
-                }
-                initializeKVServer(serverPool.get(i));
+                metaDataTable.addNode(serverPool.get(i), StatusType.INIT, cacheStrategy, Integer.toString(cacheSize));
             }
+        }
+
+        byte[] data = metaDataTable.toMessageString().getBytes();
+
+        try {
+            zkManager.create(path, data);
+            Stat stat = zkManager.getZNodeStats(path);
+        }
+        catch(KeeperException | InterruptedException e){
+            System.out.println(e.getMessage());
         }
         return null;
     }
@@ -262,7 +260,6 @@ public class ECSClient implements IECSClient {
 
     @Override
     public boolean removeNodes(Collection<String> nodeNames) {
-        String path;
         for(String node:nodeNames){
             for (int i = 0; i < serverPoolCount; i++) {
                 if(serverPool.get(i).getNodeName().equals(node))
@@ -270,17 +267,8 @@ public class ECSClient implements IECSClient {
                     serverPool.get(i).busy = false;
                     activeServerPoolCount -= 1;
                     serverPool.get(i).setEnd(serverPool.get((i+1) % serverPoolCount).getStart());
+                    metaDataTable.removeNode(node);
 
-                    if(activeServerPoolCount == 0){
-                        try
-                        {
-                            path = "/" + serverPool.get(i).getNodeName();
-                            zkManager.delete(path);
-                            log.info("server: " + serverPool.get(i).getNodeName() + " got removed, last server!! active: " + Integer.toString(activeServerPoolCount));
-                        } catch (KeeperException | InterruptedException e) {
-                            log.warn(e.getMessage());
-                        }
-                    }
                     for(int j = 1; j < serverPoolCount; j++)
                     {
                         int modPosition = (i + serverPoolCount - j) % serverPoolCount;
@@ -289,17 +277,10 @@ public class ECSClient implements IECSClient {
                             for(int k = 1; k < serverPoolCount; k++) {
                                 if (serverPool.get((i + k) % serverPoolCount).busy == true) {
                                     serverPool.get(modPosition).setEnd(serverPool.get((i + k) % serverPoolCount).getStart());
-                                    path = "/" + serverPool.get(modPosition).getNodeName();
-                                    System.out.println("notitying node: " + path);
-                                    byte[] data = ("STATE:UPDATE" + " HSTART:" + serverPool.get(modPosition).getStart()
-                                            + " HEND:" + serverPool.get(modPosition).getEnd()).getBytes();
+                                    metaDataTable.modifyNode(serverPool.get(modPosition), StatusType.START);
+                                    byte[] data = metaDataTable.toMessageString().getBytes();
                                     try {
                                         zkManager.update(path, data);
-                                        String response = zkManager.getZNodeData(path, true);
-                                        if (response.equals("SUCCESS")) {
-                                            path = "/" + serverPool.get(i).getNodeName();
-                                            zkManager.delete(path);
-                                        }
                                     } catch (KeeperException | InterruptedException e) {
                                         System.out.println(e.getMessage());
                                     }
@@ -345,9 +326,8 @@ public class ECSClient implements IECSClient {
             clientApplication.addNode("FIFO", 200);
             clientApplication.start();
             clientApplication.removeNodes(new ArrayList<String>(
-                    Arrays.asList("Server 127.0.0.1:50000", "Server 127.0.0.1:50002","Server 127.0.0.1:50007",
-                            "Server 127.0.0.1:50006", "Server 127.0.0.1:50005", "Server 127.0.0.1:50003")));
-
+                    Arrays.asList("Server 127.0.0.1:50005","Server 127.0.0.1:50002")));
+            clientApplication.stop();
 
         }
     }

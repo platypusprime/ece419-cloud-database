@@ -34,7 +34,15 @@ public interface KVMessage {
 		/** Server locked for out, only get possible */
 		SERVER_WRITE_LOCK,
 		/** Request not successful, server not responsible for key */
-		SERVER_NOT_RESPONSIBLE
+		SERVER_NOT_RESPONSIBLE,
+		/** Server at init stage **/
+		INIT,
+		/** Server should be started if not already **/
+		START,
+		/** Server should be stopped if not already **/
+		STOP,
+		/** Server should be shut down if not already **/
+		SHUTDOWN
 	}
 
 	/** The JSON attribute name for the status. */
