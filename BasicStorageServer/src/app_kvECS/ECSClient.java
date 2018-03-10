@@ -41,13 +41,12 @@ public class ECSClient implements IECSClient {
         try( FileReader fileReader = new FileReader(file);
              BufferedReader bufferedReader = new BufferedReader(fileReader);)
         {
+            log.info("reading " + fileName);
             String line;
             serverPool = new ArrayList<ECSNode>();
             activeServerPoolCount = 0;
             int i = 0;
             while ((line = bufferedReader.readLine()) != null) {
-                System.out.println(line);
-                System.out.println(Integer.toString(i));
                 String[] parts = line.trim().split(" ");
                 String hostName = parts[0];
                 String ip = parts[1];
@@ -64,12 +63,15 @@ public class ECSClient implements IECSClient {
                     return node1.getStart().compareTo(node2.getStart());
                 }
             });
+            log.info("loaded servers: ");
             for (int j = 0; j < i-1; j++) {
                 serverPool.get(j).setEnd(serverPool.get(j+1).getStart());
-                System.out.println(serverPool.get(j).getStart() + " to " + serverPool.get(j).getEnd());
+                log.info(serverPool.get(j).getNodeName() + "hash range: " + serverPool.get(j).getStart() + " to "
+                        + serverPool.get(j).getEnd());
             }
             serverPool.get(serverPoolCount-1).setEnd(serverPool.get(0).getStart());
-            System.out.println(serverPool.get(serverPoolCount-1).getStart() + " to " + serverPool.get(serverPoolCount-1).getEnd());
+            log.info(serverPool.get(serverPoolCount-1).getNodeName() + "hash range: " +
+                    serverPool.get(serverPoolCount-1).getStart() + " to " + serverPool.get(serverPoolCount-1).getEnd());
             zkManager = new ZKManager();
             metaDataTable = new MetadataUpdateMessage();
         }
@@ -83,9 +85,11 @@ public class ECSClient implements IECSClient {
 
     public void initializeKVServer(ECSNode node){
         try {
-            String command = "ssh -n " + node.getNodeHost() + " nohup java -jar ~/Desktop/ece419/ece419-cloud-database/BasicStorageServer/m2-server.jar " + node.getNodePort() +" 200 FIFO > /dev/null &";
+            String command = "ssh -n " + node.getNodeHost() + " nohup java -jar " +
+                    "~/Desktop/ece419/ece419-cloud-database/BasicStorageServer/m2-server.jar "
+                    + node.getNodePort() +" 200 FIFO > /dev/null &";
             // print a message
-            System.out.println("Executing ssh command...:" + command);
+            log.info("Executing ssh command: " + command);
 
             Process process = Runtime.getRuntime().exec(command);
 
@@ -96,16 +100,16 @@ public class ECSClient implements IECSClient {
                     InputStreamReader(process.getErrorStream()));
 
             // read the output from the command
-            System.out.println("Here is the standard output of the command:\n");
+            log.info("Here is the standard output of the command:\n");
             String s = null;
             while ((s = stdInput.readLine()) != null) {
-                System.out.println(s);
+                log.info(s);
             }
 
             // read any errors from the attempted command
-            System.out.println("Here is the standard error of the command (if any):\n");
+            log.info("Here is the standard error of the command (if any):\n");
             while ((s = stdError.readLine()) != null) {
-                System.out.println(s);
+                log.info(s);
             }
 
         } catch (Exception ex) {
@@ -184,6 +188,7 @@ public class ECSClient implements IECSClient {
                     if(serverPool.get((i+j) % serverPoolCount).busy == true) {
                         serverPool.get(i).setEnd(serverPool.get((i+j) % serverPoolCount).getStart());
                         metaDataTable.addNode(serverPool.get(i), StatusType.START, cacheStrategy, Integer.toString(cacheSize));
+                        log.info(serverPool.get(i).getNodeName() + " added");
                         break;
                     }
                 }
@@ -192,12 +197,14 @@ public class ECSClient implements IECSClient {
                     if(serverPool.get(modPosition).busy == true) {
                         serverPool.get(modPosition).setEnd(serverPool.get(i).getStart());
                         metaDataTable.modifyNode(serverPool.get(modPosition), StatusType.START);
+                        log.info(serverPool.get(modPosition).getNodeName() + " hash range modified, start: " +
+                                serverPool.get(modPosition).getStart() + " end:" + serverPool.get(modPosition).getEnd());
                         data = metaDataTable.toMessageString().getBytes();
                         try {
                             zkManager.update(path, data);
                         }
                         catch(KeeperException | InterruptedException e){
-                            System.out.println(e.getMessage());
+                            log.warn(e.getMessage());
                         }
                         break;
                     }
@@ -239,9 +246,10 @@ public class ECSClient implements IECSClient {
                 }
             }
         }
+        log.info("nodes added: ");
         for(int i = 0; i < serverPoolCount; i++){
             if(serverPool.get(i).busy == true) {
-                System.out.println("active server " + Integer.toString(i) + ": "+ serverPool.get(i).getStart() + " to " + serverPool.get(i).getEnd());
+                log.info(serverPool.get(i).getNodeName() + " : "+ serverPool.get(i).getStart() + " to " + serverPool.get(i).getEnd());
             }
         }
         setupNodes(count, cacheStrategy, cacheSize);
@@ -263,9 +271,10 @@ public class ECSClient implements IECSClient {
         try {
             zkManager.create(path, data);
             Stat stat = zkManager.getZNodeStats(path);
+            log.info("znode created, stats: " + stat.toString());
         }
         catch(KeeperException | InterruptedException e){
-            System.out.println(e.getMessage());
+            log.warn(e.getMessage());
         }
         return null;
     }
@@ -300,12 +309,13 @@ public class ECSClient implements IECSClient {
                                     try {
                                         zkManager.update(path, data);
                                     } catch (KeeperException | InterruptedException e) {
-                                        System.out.println(e.getMessage());
+                                        log.warn(e.getMessage());
                                     }
                                     break;
                                 }
                             }
-                            log.info("server: " + serverPool.get(i).getNodeName() + " got removed, remaining servers: " + Integer.toString(activeServerPoolCount));
+                            log.info("server: " + serverPool.get(i).getNodeName() + " got removed, remaining servers: "
+                                    + Integer.toString(activeServerPoolCount));
                             break;
                         }
                     }
@@ -364,9 +374,7 @@ public class ECSClient implements IECSClient {
             }
 
         } else if (tokens[0].equals("addnodes")) {
-            System.out.println(Integer.toString(tokens.length));
             if (tokens.length == 4) {
-                System.out.println(tokens[1] + tokens[2] + tokens[3]);
                 addNodes(Integer.parseInt(tokens[1]), tokens[2], Integer.parseInt(tokens[3]));
             }
             else{
@@ -384,14 +392,45 @@ public class ECSClient implements IECSClient {
             }
 
         } else if (tokens[0].equals("quit")) {
+            log.info("quitting ECS...");
             return true;
 
-        } else {
+        }  else if (tokens[0].equals("help")) {
+            printHelp();
+        }else {
             log.warn("Unknown command;");
-//            printHelp();
+            printHelp();
         }
 
         return false;
+    }
+
+    /**
+     * Prints the help message for the CLI.
+     */
+    private void printHelp() {
+        log.info("");
+        log.info("::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::");
+        log.info("KV ECS HELP (Usage):");
+        log.info("::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::");
+        log.info("addnode <cache strategy> <cache size>");
+        log.info("\tRandomly choose <numberOfNodes> servers from the available machines and");
+        log.info("\tstart the KVServer by issuing an SSH call to the respective machine.");
+        log.info("addnodes <count> <cache strategy> <cache size>");
+        log.info("\tSets up `count` servers with the ECS (in this case Zookeeper)");
+        log.info("start");
+        log.info("\tStarts all the storage services");
+        log.info("stop");
+        log.info("\tStops all the storage services");
+        log.info("shutdown");
+        log.info("\tShuts down all the storage services");
+        log.info("remove <nodeNames> ...");
+        log.info("\tRemoves nodes with given names");
+        log.info("help");
+        log.info("\tShows this message");
+        log.info("quit");
+        log.info("\tQuit this application");
+        log.info("");
     }
 
     public static void main(String[] args) {
@@ -400,8 +439,11 @@ public class ECSClient implements IECSClient {
             System.out.println("Usage: Config File <name>");
         } else {
             try (BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in))) {
+                System.out.println("Welcome to kvECS application");
+                System.out.println("Usage Procedure: addnodes -> start -> addnode/remove");
                 boolean stop = false;
                 ECSClient clientApplication = new ECSClient(args[0]);
+                LogSetup.initialize("logs/ecs.log", Level.INFO, CONSOLE_PATTERN);
                 while (!stop) {
                     System.out.print(PROMPT);
 
