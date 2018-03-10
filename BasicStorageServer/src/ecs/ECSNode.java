@@ -46,7 +46,7 @@ public class ECSNode implements IECSNode {
 	public ECSNode(String host, int port, String start, String end) {
 		this.host = host;
 		this.port = port;
-		this.name = "Server " + host + ":" + port;
+		this.name = "Server-" + host + ":" + port;
 		this.setStart(start);
 		this.setEnd(end);
 		this.busy = false;

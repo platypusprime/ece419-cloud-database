@@ -1,6 +1,7 @@
 package app_kvECS;
 
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import logger.LogSetup;
 import java.io.IOException;
 import common.HashUtil;
@@ -81,14 +83,30 @@ public class ECSClient implements IECSClient {
 
     public void initializeKVServer(ECSNode node){
         try {
-            String command = "ssh -n " + node.getNodeHost() + " nohup java -jar ms2-server.jar " + node.getNodePort() +" ERROR &";
+            String command = "ssh -n " + node.getNodeHost() + " nohup java -jar ~/Desktop/ece419/ece419-cloud-database/BasicStorageServer/m2-server.jar " + node.getNodePort() +" 200 FIFO > /dev/null &";
             // print a message
-            System.out.println("Executing ssh command...");
+            System.out.println("Executing ssh command...:" + command);
 
             Process process = Runtime.getRuntime().exec(command);
 
-            // print another message
-            System.out.println("Command sent to KVServer...");
+            BufferedReader stdInput = new BufferedReader(new
+                    InputStreamReader(process.getInputStream()));
+
+            BufferedReader stdError = new BufferedReader(new
+                    InputStreamReader(process.getErrorStream()));
+
+            // read the output from the command
+            System.out.println("Here is the standard output of the command:\n");
+            String s = null;
+            while ((s = stdInput.readLine()) != null) {
+                System.out.println(s);
+            }
+
+            // read any errors from the attempted command
+            System.out.println("Here is the standard error of the command (if any):\n");
+            while ((s = stdError.readLine()) != null) {
+                System.out.println(s);
+            }
 
         } catch (Exception ex) {
             log.fatal("Unable to execute command",ex);
@@ -105,7 +123,6 @@ public class ECSClient implements IECSClient {
                 byte[] data = metaDataTable.toMessageString().getBytes();
                 try {
                     zkManager.update(path, data);
-                    String getData = zkManager.getZNodeData(path, false);
                 }
                 catch(KeeperException | InterruptedException e){
                     log.warn(e.getMessage());
@@ -237,6 +254,7 @@ public class ECSClient implements IECSClient {
         for (int i = 0; i < serverPoolCount; i++) {
             if (serverPool.get(i).busy == true) {
                 metaDataTable.addNode(serverPool.get(i), StatusType.INIT, cacheStrategy, Integer.toString(cacheSize));
+                initializeKVServer(serverPool.get(i));
             }
         }
 
@@ -299,14 +317,81 @@ public class ECSClient implements IECSClient {
 
     @Override
     public Map<String, IECSNode> getNodes() {
-        // TODO
-        return null;
+        Map<String, IECSNode>nodes = new HashMap<String, IECSNode>();
+        for (int i = 0; i < serverPoolCount; i++) {
+            nodes.put(serverPool.get(i).getNodeName(), serverPool.get(i));
+        }
+        return nodes;
     }
 
     @Override
     public IECSNode getNodeByKey(String Key) {
-        // TODO
+        for (int i = 0; i < serverPoolCount; i++) {
+            if(serverPool.get(i).getNodeName().equals(Key))
+            {
+                return serverPool.get(i);
+            }
+        }
         return null;
+    }
+
+    public boolean handleCommand(String ln) {
+        if (ln == null || ln.isEmpty()) {
+            log.warn("Please input a command;");
+            return false;
+        }
+
+        String[] tokens = ln.trim().split("\\s+");
+
+        if (tokens.length < 1) {
+            log.warn("Please input a command;");
+
+        } else if (tokens[0].equals("start")) {
+            start();
+
+        } else if (tokens[0].equals("stop")) {
+            stop();
+
+        } else if (tokens[0].equals("shutdown")) {
+            shutdown();
+
+        } else if (tokens[0].equals("addnode")) {
+            if (tokens.length == 3) {
+                addNode(tokens[1], Integer.parseInt(tokens[2]));
+            }
+            else{
+                log.error("Wrong number of arguments for addnode command");
+            }
+
+        } else if (tokens[0].equals("addnodes")) {
+            System.out.println(Integer.toString(tokens.length));
+            if (tokens.length == 4) {
+                System.out.println(tokens[1] + tokens[2] + tokens[3]);
+                addNodes(Integer.parseInt(tokens[1]), tokens[2], Integer.parseInt(tokens[3]));
+            }
+            else{
+                log.error("Wrong number of arguments for addnodes command");
+            }
+
+        } else if (tokens[0].equals("remove")) {
+            if (tokens.length > 1) {
+                String[] names = Arrays.copyOfRange(tokens, 1, tokens.length);
+                ArrayList<String> inputNames = new ArrayList<String>(Arrays.asList(names));
+                removeNodes(inputNames);
+            }
+            else{
+                log.error("Wrong number of arguments for removenode command");
+            }
+
+        } else if (tokens[0].equals("quit")) {
+            return true;
+
+        } else {
+            log.warn("Unknown command;");
+//            printHelp();
+        }
+
+        return false;
     }
 
     public static void main(String[] args) {
@@ -314,20 +399,26 @@ public class ECSClient implements IECSClient {
             System.out.println("Error! Invalid number of arguments!");
             System.out.println("Usage: Config File <name>");
         } else {
-            try {
-                LogSetup.initialize("logs/ecs.log", Level.INFO, CONSOLE_PATTERN);
+            try (BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in))) {
+                boolean stop = false;
+                ECSClient clientApplication = new ECSClient(args[0]);
+                while (!stop) {
+                    System.out.print(PROMPT);
+
+                    try {
+                        String ln = stdin.readLine();
+                        stop = clientApplication.handleCommand(ln);
+
+                    } catch (IOException e) {
+                        stop = true;
+                        log.warn("IO exception while reading from standard input", e);
+                    }
+                }
             } catch (IOException e) {
-                System.out.println("ERROR: unable to initialize logger");
-                e.printStackTrace();
-                System.exit(1);
+                log.fatal("IO exception while closing standard input reader", e);
             }
-            ECSClient clientApplication = new ECSClient(args[0]);
-            clientApplication.addNodes(5, "FIFO",200);
-            clientApplication.addNode("FIFO", 200);
-            clientApplication.start();
-            clientApplication.removeNodes(new ArrayList<String>(
-                    Arrays.asList("Server 127.0.0.1:50005","Server 127.0.0.1:50002")));
-            clientApplication.stop();
+
+            log.info("KVECS shutting down");
 
         }
     }
