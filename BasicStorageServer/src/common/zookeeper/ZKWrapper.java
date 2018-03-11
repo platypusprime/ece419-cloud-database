@@ -152,7 +152,7 @@ public class ZKWrapper {
 	}
 
 	/**
-	 * Creates a ZNode at the specified path with initial data.
+	 * Creates an ephemeral ZNode at the specified path with initial data.
 	 * 
 	 * @param path The path of the ZNode to create
 	 * @param data The data to initialize the ZNode to
@@ -161,7 +161,7 @@ public class ZKWrapper {
 	 */
 	public void createNode(String path, byte[] data) throws KeeperException, InterruptedException {
 		// TODO do a better job with ACLs
-		zookeeper.create(path, data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+		zookeeper.create(path, data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
 	}
 
 	/**
