@@ -20,6 +20,7 @@ import app_kvServer.cache.LfuCache;
 import app_kvServer.cache.LruCache;
 import app_kvServer.persistence.FilePersistence;
 import app_kvServer.persistence.KVPersistence;
+import common.messages.KVMessage.StatusType;
 import logger.LogSetup;
 
 /**
@@ -35,6 +36,17 @@ public class KVServer implements IKVServer, Runnable {
 	private final int port;
 	private final KVCache cacheManager;
 	private final KVPersistence persistenceManager;
+	
+	public static enum ServerStatus {
+		/** Server running and serving all requests normally */
+		RUNNING,
+		/** Server is stopped, no requests are to be processed */
+		STOPPED,
+		/** Server locked for write, only get requests are served */
+		WRITE_LOCKED
+	}
+	
+	private ServerStatus status = ServerStatus.STOPPED;
 
 	private ServerSocket serverSocket;
 	private List<ClientConnection> clients = new ArrayList<>(); // TODO handle de-registering clients
@@ -128,6 +140,10 @@ public class KVServer implements IKVServer, Runnable {
 
 		// begin execution on new thread
 		new Thread(this).start();
+	}
+	
+	public ServerStatus getStatus() {
+		return status;
 	}
 
 	@Override
