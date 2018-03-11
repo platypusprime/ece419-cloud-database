@@ -36,6 +36,16 @@
   <property name="ivy.jar.dir" value="${ivy.home}/lib" />
   <property name="ivy.jar.file" value="${ivy.jar.dir}/ivy.jar" />
 
+  <!-- Configuration for Zookeeper -->
+  <property name="zk.version" value="3.4.11" />
+  <property name="zk.home.dir" value="${basedir}/zookeeper" />
+  <property name="zk.unzip.dir" value="${zk.home.dir}/zookeeper-${zk.version}" />
+  <property name="zk.bin.dir" value="${zk.unzip.dir}/bin" />
+  <property name="zk.server.script" value="${zk.bin.dir}/zkServer.sh" />
+  <property name="zk.conf.dir" value="${zk.unzip.dir}/conf" />
+  <property name="zk.conf.file" value="${zk.conf.dir}/zoo.cfg" />
+  <property name="zk.data.dir" value="${zk.home.dir}/data" />
+
   <!-- Class path -->
   <path id="project.classpath">
     <fileset dir="${basedir}">
@@ -76,6 +86,49 @@
     <ivy:retrieve />
   </target>
   <!-- ========= Ivy targets END ========= -->
+
+  <!-- ========= ZooKeeper targets START ========= -->
+  <target name="check-zookeeper" description="checks if the zookeeper tar exists">
+    <condition property="zk.missing">
+      <not>
+        <available file="${zk.home.dir}/zookeeper-${zk.version}.tar.gz" />
+      </not>
+    </condition>
+  </target>
+
+  <target name="download-zookeeper" unless="offline" depends="check-zookeeper" if="zk.missing" description="download zookeeper from apache web site">
+    <mkdir dir="${zk.home.dir}" />
+    <get src="https://archive.apache.org/dist/zookeeper/zookeeper-${zk.version}/zookeeper-${zk.version}.tar.gz" dest="${zk.home.dir}" usetimestamp="true" />
+    <untar src="${zk.home.dir}/zookeeper-${zk.version}.tar.gz" dest="${zk.home.dir}" compression="gzip" />
+  </target>
+
+  <target name="write-zoo-cfg" depends="download-zookeeper" description="writes the zookeeper config file">
+    <touch file="${zk.conf.file}" />
+    <propertyfile file="${zk.conf.file}">
+      <entry  key="tickTime" 	value="2000" />
+      <entry  key="initLimit" 	value="10" />
+      <entry  key="syncLimit" 	value="5" />
+      <entry  key="dataDir" 	value="${zk.data.dir}" />
+      <entry  key="clientPort" 	value="2181" />
+    </propertyfile>
+  </target>
+
+  <target name="add-permissions-zookeeper" depends="download-zookeeper" description="enables zookeeper scripts for execution">
+    <chmod dir="${zk.bin.dir}" perm="+x" includes="**/*.sh" />
+  </target>
+
+  <target name="zookeeper-start" depends="write-zoo-cfg, add-permissions-zookeeper" description="starts the zookeeper service">
+    <exec executable="${zk.server.script}">
+      <arg value="start"/>
+    </exec>
+  </target>
+
+  <target name="zookeeper-stop" depends="download-zookeeper, add-permissions-zookeeper" description="stops the zookeeper service">
+    <exec executable="${zk.server.script}">
+      <arg value="stop"/>
+    </exec>
+  </target>
+  <!-- ========= ZooKeeper targets END ========= -->
 
   <!-- Group all dependencies into a big dependency-all.jar -->
   <target name="copy-dependencies" depends="resolve" description="consolidates dependencies in one jar">

@@ -19,3 +19,6 @@
 # Assignment files
 *.tgz
 *.pdf
+
+# ZooKeeper files
+/BasicStorageServer/zookeeper/**
