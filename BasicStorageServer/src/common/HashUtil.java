@@ -16,6 +16,19 @@ public class HashUtil {
 	public static final String MAX_MD5 = "ffffffffffffffffffffffffffffffff";
 
 	/**
+	 * Computes the MD5 hash for the given socket address.
+	 * 
+	 * @param host The hostname of the socket
+	 * @param port The port number for the socket
+	 * @return The computed MD5 hash, or <code>null</code>
+	 *         if the given hostname was <code>null</code>
+	 */
+	public static String toMD5(String host, int port) {
+		if (host == null) return null;
+		return HashUtil.toMD5(host.concat(Integer.toString(port)));
+	}
+
+	/**
 	 * Computes the MD5 hash for a given string.
 	 * 
 	 * @param s The string to hash
