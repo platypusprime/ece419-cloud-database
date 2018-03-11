@@ -79,7 +79,6 @@
 
   <!-- Group all dependencies into a big dependency-all.jar -->
   <target name="copy-dependencies" depends="resolve" description="consolidates dependencies in one jar">
-    <delete file="${dependencies.jar.file}" />
     <jar jarfile="${dependencies.jar.file}">
       <zipgroupfileset dir="${lib.dir}">
         <include name="**/*.jar" />
