@@ -6,6 +6,7 @@ import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.apache.log4j.Logger;
@@ -62,7 +63,8 @@ public class ZKWrapper {
 	private static final Logger log = Logger.getLogger(ZKWrapper.class);
 
 	// TODO tune as necessary
-	private static final int ZK_INIT_TIMEOUT = 2 * 1000;
+	private static final int ZK_INIT_TIMEOUT = 2;
+	private static final int ZK_SESSION_TIMEOUT = 100 * 1000;
 
 	// ZooKeeper fields
 	private final String zkHostname;
@@ -118,14 +120,17 @@ public class ZKWrapper {
 		String connectStr = zkHostname + ":" + zkPort;
 		CountDownLatch connectionLatch = new CountDownLatch(1);
 
-		ZooKeeper zookeeper = new ZooKeeper(connectStr, ZK_INIT_TIMEOUT,
+		ZooKeeper zookeeper = new ZooKeeper(connectStr, ZK_SESSION_TIMEOUT,
 				watchedEvent -> {
 					if (watchedEvent.getState() == KeeperState.SyncConnected)
 						connectionLatch.countDown();
 				});
-		connectionLatch.await();
+		connectionLatch.await(ZK_INIT_TIMEOUT, TimeUnit.SECONDS);
 
-		this.zookeeper = zookeeper;
+		if (zookeeper.getState() == ZooKeeper.States.CONNECTED) {
+			log.info("Connection to ZooKeeper service successful");
+			this.zookeeper = zookeeper;
+		}
 	}
 
 	/**
