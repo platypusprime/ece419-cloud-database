@@ -20,6 +20,7 @@ public abstract class ServerTest {
 	/**
 	 * Initializes the server used for this test class and sets up logging.
 	 */
+	@SuppressWarnings("deprecation")
 	@BeforeClass
 	public static void serverSetup() {
 		try {
