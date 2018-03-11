@@ -94,7 +94,9 @@ public class ECSNode implements IECSNode {
 
 	@Override
 	public boolean containsHash(String hash) {
-		HashUtil.validateHash(hash);
+		if (!HashUtil.validateHash(hash)) {
+			return false;
+		}
 
 		// no end value corresponds to full hash circle
 		if (end == null) {
@@ -113,9 +115,9 @@ public class ECSNode implements IECSNode {
 	@Override
 	public String toString() {
 		return new StringBuilder("ECSNode{")
-				.append(" name: ").append(name)
-				.append(" address: ").append(host).append(":").append(port)
-				.append(" range: [").append(start).append(",").append(end == null ? "" : end).append(")")
+				.append(" name:").append(String.valueOf(name))
+				.append(" address:").append(host).append(":").append(port)
+				.append(" range:[").append(start).append(",").append(end == null ? "" : end).append(")")
 				.append(" }").toString();
 	}
 
