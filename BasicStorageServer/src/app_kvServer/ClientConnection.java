@@ -101,6 +101,10 @@ public class ClientConnection implements Runnable {
 						break;
 
 					case PUT:
+						if (serverStatus == ServerStatus.WRITE_LOCKED) {
+							outStatus = StatusType.SERVER_WRITE_LOCK;
+							break;
+						}
 						boolean keyExists = server.inCache(request.getKey()) || server.inStorage(request.getKey());
 						boolean valueEmpty = request.getValue() == null || request.getValue().isEmpty();
 						outKey = request.getKey();
