@@ -25,7 +25,7 @@ public class HashUtil {
 	 */
 	public static String toMD5(String host, int port) {
 		if (host == null) return null;
-		return HashUtil.toMD5(host.concat(Integer.toString(port)));
+		return HashUtil.toMD5(host + ":" + port);
 	}
 
 	/**
