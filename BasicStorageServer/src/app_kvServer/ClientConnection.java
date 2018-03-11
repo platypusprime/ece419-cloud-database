@@ -53,16 +53,22 @@ public class ClientConnection implements Runnable {
 			while (isOpen) {
 
 				// receive message from client
+				String inStr = null;
 				KVMessage request = null;
 				try {
 					log.info("Listening for client messages");
-					String inStr = streamUtil.receiveString(in);
+					inStr = streamUtil.receiveString(in);
 					// TODO validate message type
 					// String msgType = streamUtil.identifyMessageType(inStr);
 					request = streamUtil.deserializeKVMessage(inStr);
 				} catch (IOException e) {
 					log.error("Error! Connection lost!", e);
 					isOpen = false;
+				}
+
+				if (request == null) {
+					log.error("Invalid incoming message: " + inStr);
+					return;
 				}
 
 				String outKey = null;
@@ -120,9 +126,7 @@ public class ClientConnection implements Runnable {
 				KVMessage outMsg = new BasicKVMessage(outKey, outValue, outStatus);
 				streamUtil.sendMessage(out, outMsg);
 
-				/*
-				 * connection either terminated by the client or lost due to network problems
-				 */
+				/* connection either terminated by the client or lost due to network problems */
 
 			}
 
