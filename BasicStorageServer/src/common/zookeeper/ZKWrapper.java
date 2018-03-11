@@ -23,6 +23,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 
 import ecs.IECSNode;
+import ecs.IECSNodeDeserializer;
 import ecs.IECSNodeSerializer;
 
 /**
@@ -104,6 +105,7 @@ public class ZKWrapper {
 		// initialize GSON object
 		gson = new GsonBuilder()
 				.registerTypeAdapter(IECSNode.class, new IECSNodeSerializer())
+				.registerTypeAdapter(IECSNode.class, new IECSNodeDeserializer())
 				.create();
 	}
 
