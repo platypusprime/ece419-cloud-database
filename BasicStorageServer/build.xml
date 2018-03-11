@@ -227,12 +227,16 @@
   <target name="build-jar" depends="build-client-jar, build-server-jar, build-ecs-jar" />
 
   <!-- run test cases -->
-  <target name="test" depends="build">
-    <junit>
-      <classpath refid="project.classpath" />
+  <target name="test" depends="build, zookeeper-start">
+    <junit fork="yes">
+      <classpath>
+        <pathelement location="${build.dir}"/>
+        <pathelement path="${toString:project.classpath}"/>
+      </classpath>
       <formatter type="brief" usefile="false" />
       <test name="testing.AllTests" />
     </junit>
+    <antcall target="zookeeper-stop" />
   </target>
 
   <target name="run" >

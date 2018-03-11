@@ -7,6 +7,9 @@ import testing.app_kvServer.cache.FifoCacheTest;
 import testing.app_kvServer.cache.LfuCacheTest;
 import testing.app_kvServer.cache.LruCacheTest;
 import testing.app_kvServer.persistence.FilePersistenceTest;
+import testing.common.messages.StreamUtilTest;
+import testing.common.zookeeper.ZKWrapperTest;
+import testing.ecs.ECSNodeTest;
 
 /**
  * An aggregate test suite that runs all tests for the storage server project.
@@ -20,6 +23,9 @@ import testing.app_kvServer.persistence.FilePersistenceTest;
 		FifoCacheTest.class,
 		LfuCacheTest.class,
 		LruCacheTest.class,
-		FilePersistenceTest.class
+		FilePersistenceTest.class,
+		StreamUtilTest.class,
+		ECSNodeTest.class,
+		ZKWrapperTest.class
 })
 public class AllTests {}
