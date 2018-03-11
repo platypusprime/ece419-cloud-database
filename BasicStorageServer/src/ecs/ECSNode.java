@@ -1,6 +1,7 @@
 package ecs;
 
 import java.net.InetSocketAddress;
+import java.util.Objects;
 
 import common.HashUtil;
 
@@ -14,41 +15,44 @@ import common.HashUtil;
  */
 public class ECSNode implements IECSNode {
 
-	private String name;
-	private String host;
-	private int port;
-	private String start;
+	private final String name;
+	private final String host;
+	private final int port;
+	private final String start;
 	private String end;
+	private final String cacheStrategy;
+	private final int cacheSize;
 
 	/**
-	 * Creates a server metadata object with default range. Contains information
-	 * about both the
-	 * server's listening socket and hash range. The hash range descends from
-	 * <code>start</code> to <code>end</code>.
+	 * Creates a sparse server metadata object. Used on the client-side application
+	 * as an initial server.
 	 * 
 	 * @param host The hostname for the associated server
 	 * @param port The listening port number for the associated server
 	 */
 	public ECSNode(String host, int port) {
-		this(host, port, HashUtil.MAX_MD5, HashUtil.MIN_MD5);
+		this(null, host, port, null, -1);
 	}
 
 	/**
-	 * Creates a server metadata object. Contains information about both the
-	 * server's listening socket and hash range. The hash range descends from
-	 * <code>start</code> to <code>end</code>.
+	 * Creates a server metadata object. Contains information about the server's
+	 * listening socket, hash range, and cache configuration. The hash range
+	 * descends from <code>start</code> (inclusive) to <code>end</code> (exclusive).
 	 * 
+	 * @param name A string naming the associated server
 	 * @param host The hostname for the associated server
 	 * @param port The listening port number for the associated server
-	 * @param start The hash value of the start index (inclusive)
-	 * @param end The hash value of the end index (exclusive)
+	 * @param cacheStrategy The cache strategy for the associated server
+	 * @param cacheSize The cache size for the associated server
 	 */
-	public ECSNode(String host, int port, String start, String end) {
+	public ECSNode(String name, String host, int port, String cacheStrategy, int cacheSize) {
+		this.name = name;
 		this.host = host;
 		this.port = port;
-		this.name = "Server " + host + ":" + port;
-		this.setStart(start);
-		this.setEnd(end);
+		this.start = HashUtil.toMD5(host, port);
+		this.end = null;
+		this.cacheStrategy = cacheStrategy;
+		this.cacheSize = cacheSize;
 	}
 
 	@Override
@@ -71,56 +75,31 @@ public class ECSNode implements IECSNode {
 		return new InetSocketAddress(getNodeHost(), getNodePort());
 	}
 
-	/**
-	 * Returns the start index of the associated hash range.
-	 * 
-	 * @return The start index (inclusive)
-	 */
-	public String getStart() {
+	@Override
+	public String getNodeHashRangeStart() {
 		return start;
 	}
 
-	/**
-	 * Sets the start index of the associated hash range.
-	 * 
-	 * @param start The start index to set
-	 * @throws IllegalArgumentException If the given index is not a valid MD5 hash
-	 */
-	public void setStart(String start) throws IllegalArgumentException {
-		if (!HashUtil.validateHash(start))
-			throw new IllegalArgumentException("Start value \"" + start + "\" is not a valid MD5 hash");
-		this.start = start;
-	}
-
-	/**
-	 * Returns the end index of the associated hash range.
-	 * 
-	 * @return The end index (exclusive)
-	 */
-	public String getEnd() {
+	@Override
+	public String getNodeHashRangeEnd() {
 		return end;
 	}
 
-	/**
-	 * Sets the end index of the associated hash range.
-	 * 
-	 * @param end The end index to set
-	 * @throws IllegalArgumentException If the given index is not a valid MD5 hash
-	 */
-	public void setEnd(String end) throws IllegalArgumentException {
+	@Override
+	public void setNodeHashRangeEnd(String end) throws IllegalArgumentException {
 		if (!HashUtil.validateHash(end))
 			throw new IllegalArgumentException("End value \"" + end + "\" is not a valid MD5 hash");
 		this.end = end;
 	}
 
 	@Override
-	public String[] getNodeHashRange() {
-		return new String[] { getStart(), getEnd() };
-	}
-
-	@Override
 	public boolean containsHash(String hash) {
 		HashUtil.validateHash(hash);
+
+		// no end value corresponds to full hash circle
+		if (end == null) {
+			return true;
+		}
 
 		if (start.compareTo(end) > 0) {
 			// no wrap-around
@@ -129,7 +108,40 @@ public class ECSNode implements IECSNode {
 			// wrap-around
 			return hash.compareTo(start) <= 0 || hash.compareTo(end) > 0;
 		}
+	}
 
+	@Override
+	public String toString() {
+		return new StringBuilder("ECSNode{")
+				.append(" name: ").append(name)
+				.append(" address: ").append(host).append(":").append(port)
+				.append(" range: [").append(start).append(",").append(end == null ? "" : end).append(")")
+				.append(" }").toString();
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (!(o instanceof IECSNode)) return false;
+
+		IECSNode node = (IECSNode) o;
+		return Objects.equals(name, node.getNodeName())
+				&& Objects.equals(host, node.getNodeHost())
+				&& Objects.equals(port, node.getNodePort());
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(name, host, port);
+	}
+
+	@Override
+	public String getCacheStrategy() {
+		return cacheStrategy;
+	}
+
+	@Override
+	public int getCacheSize() {
+		return cacheSize;
 	}
 
 }

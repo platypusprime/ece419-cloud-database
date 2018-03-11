@@ -54,7 +54,7 @@ public class ServerMetadataCache {
 	 * @param metadata The metadata information to update in the cache
 	 */
 	public void updateServer(IECSNode metadata) {
-		metadataCache.put(metadata.getNodeHashRange()[0], metadata);
+		metadataCache.put(metadata.getNodeHashRangeStart(), metadata);
 	}
 
 	/**
@@ -71,6 +71,6 @@ public class ServerMetadataCache {
 	 * @param metadata The stale metadata
 	 */
 	public void invalidateServer(IECSNode metadata) {
-		metadataCache.remove(metadata.getNodeHashRange()[0]);
+		metadataCache.remove(metadata.getNodeHashRangeStart());
 	}
 }
