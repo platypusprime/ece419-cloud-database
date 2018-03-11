@@ -422,6 +422,9 @@ public class ECSClient implements IECSClient {
 		}
 	}
 
+	/**
+	 * Starts the admin CLI standard input loop.
+	 */
 	private void runAdminConsole() {
 		try (BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in))) {
 			log.info("Welcome to kvECS application");
@@ -445,9 +448,16 @@ public class ECSClient implements IECSClient {
 		}
 
 		log.info("KVECS shutting down");
-
+		shutdown();
 	}
 
+	/**
+	 * Interprets a single command from the admin CLI.
+	 * 
+	 * @param ln The command to process
+	 * @return <code>true</code> if execution should stop after the current command,
+	 *         <code>false</code> otherwise
+	 */
 	public boolean handleCommand(String ln) {
 		if (ln == null || ln.isEmpty()) {
 			log.warn("Please input a command;");
@@ -457,7 +467,8 @@ public class ECSClient implements IECSClient {
 		String[] tokens = ln.trim().split("\\s+");
 
 		if (tokens.length < 1) {
-			log.warn("Please input a command;");
+			log.warn("Empty command");
+			printHelp();
 
 		} else if (tokens[0].equals("start")) {
 			start();
@@ -467,38 +478,30 @@ public class ECSClient implements IECSClient {
 
 		} else if (tokens[0].equals("shutdown")) {
 			shutdown();
+			return true;
 
-		} else if (tokens[0].equals("addnode")) {
+		} else if (tokens[0].equals("add")) {
 			if (tokens.length == 3) {
 				addNode(tokens[1], Integer.parseInt(tokens[2]));
-			} else {
-				log.error("Wrong number of arguments for addnode command");
-			}
-
-		} else if (tokens[0].equals("addnodes")) {
-			if (tokens.length == 4) {
+			} else if (tokens.length == 4) {
 				addNodes(Integer.parseInt(tokens[1]), tokens[2], Integer.parseInt(tokens[3]));
 			} else {
-				log.error("Wrong number of arguments for addnodes command");
+				log.error("Invalid number of arguments (usage: add <count>(optional) <cacheStrategy> <cacheSize>)");
 			}
 
-		} else if (tokens[0].equals("remove")) {
+		} else if (tokens[0].equals("removeNodes")) {
 			if (tokens.length > 1) {
 				String[] names = Arrays.copyOfRange(tokens, 1, tokens.length);
-				ArrayList<String> inputNames = new ArrayList<String>(Arrays.asList(names));
-				removeNodes(inputNames);
+				removeNodes(Arrays.asList(names));
 			} else {
-				log.error("Wrong number of arguments for removenode command");
+				log.error("Invalid number of arguments (usage: remove <serverName1> <serverName2> ...)");
 			}
-
-		} else if (tokens[0].equals("quit")) {
-			log.info("quitting ECS...");
-			return true;
 
 		} else if (tokens[0].equals("help")) {
 			printHelp();
+
 		} else {
-			log.warn("Unknown command;");
+			log.warn("Unknown command");
 			printHelp();
 		}
 
@@ -513,23 +516,18 @@ public class ECSClient implements IECSClient {
 		log.info("::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::");
 		log.info("KV ECS HELP (Usage):");
 		log.info("::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::");
-		log.info("addnode <cache strategy> <cache size>");
-		log.info("\tRandomly choose <numberOfNodes> servers from the available machines and");
-		log.info("\tstart the KVServer by issuing an SSH call to the respective machine.");
-		log.info("addnodes <count> <cache strategy> <cache size>");
-		log.info("\tSets up `count` servers with the ECS (in this case Zookeeper)");
-		log.info("start");
-		log.info("\tStarts all the storage services");
-		log.info("stop");
-		log.info("\tStops all the storage services");
-		log.info("shutdown");
-		log.info("\tShuts down all the storage services");
-		log.info("remove <nodeNames> ...");
+		log.info("add <count>(optional) <cacheStrategy> <cacheSize>");
+		log.info("\tStarts up <count> servers (or 1, if <count> is not specified)");
+		log.info("remove <serverName1> <serverName2> ...");
 		log.info("\tRemoves nodes with given names");
+		log.info("start");
+		log.info("\tStarts all storage servers, opening them for client requests");
+		log.info("stop");
+		log.info("\tStops all storage servers, but does not end their processes");
+		log.info("shutdown");
+		log.info("\tShuts down the storage service, ending all processes and quitting the application");
 		log.info("help");
 		log.info("\tShows this message");
-		log.info("quit");
-		log.info("\tQuit this application");
 		log.info("");
 	}
 
