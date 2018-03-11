@@ -47,9 +47,11 @@ public class LogSetup {
 	public static void initialize(String logdir, Level level, String consolePattern) throws IOException {
 		PatternLayout fileLayout = new PatternLayout(FILE_PATTERN);
 		FileAppender fileAppender = new FileAppender(fileLayout, logdir, true);
+		fileAppender.setName("file");
 
 		PatternLayout consoleLayout = new PatternLayout(consolePattern);
 		ConsoleAppender consoleAppender = new ConsoleAppender(consoleLayout);
+		consoleAppender.setName("stdout");
 
 		Logger rootLogger = Logger.getRootLogger();
 		rootLogger.removeAllAppenders();
