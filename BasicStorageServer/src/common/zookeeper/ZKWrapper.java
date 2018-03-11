@@ -240,8 +240,11 @@ public class ZKWrapper {
 	 * @throws InterruptedException If the transaction is interrupted
 	 */
 	public void updateNode(String path, byte[] data) throws KeeperException, InterruptedException {
-		int version = zookeeper.exists(path, true).getVersion();
-		zookeeper.setData(path, data, version);
+		Stat stat = zookeeper.exists(path, false);
+		if (stat != null) {
+			int version = stat.getVersion();
+			zookeeper.setData(path, data, version);
+		}
 	}
 
 	/**
@@ -264,8 +267,11 @@ public class ZKWrapper {
 	 * @throws InterruptedException If the transaction is interrupted
 	 */
 	public void deleteNode(String path) throws KeeperException, InterruptedException {
-		int version = zookeeper.exists(path, false).getVersion();
-		zookeeper.delete(path, version);
+		Stat stat = zookeeper.exists(path, false);
+		if (stat != null) {
+			int version = stat.getVersion();
+			zookeeper.delete(path, version);
+		}
 
 	}
 
