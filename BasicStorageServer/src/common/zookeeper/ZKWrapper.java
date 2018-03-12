@@ -225,6 +225,21 @@ public class ZKWrapper {
 	}
 
 	/**
+	 * Retrieves and deserializes the data contained in the central metadata ZNode,
+	 * setting a watcher.
+	 * 
+	 * @param watcher The callback to set
+	 * @return The contents of the central metadata ZNodes deserialized as a list of
+	 *         server metadata objects
+	 * @throws KeeperException If the ZooKeeper server signals an error
+	 * @throws InterruptedException If the transaction is interrupted
+	 */
+	public List<IECSNode> getMetadataNodeData(Watcher watcher) throws KeeperException, InterruptedException {
+		String metadataString = getNodeData(KV_SERVICE_MD_NODE, watcher);
+		return gson.fromJson(metadataString, IECS_NODE_LIST_TYPE);
+	}
+
+	/**
 	 * Retrieves and deserializes the data contained in the central metadata ZNode.
 	 * 
 	 * @return The contents of the central metadata ZNodes deserialized as a list of
@@ -233,8 +248,7 @@ public class ZKWrapper {
 	 * @throws InterruptedException If the transaction is interrupted
 	 */
 	public List<IECSNode> getMetadataNodeData() throws KeeperException, InterruptedException {
-		String metadataString = getNodeData(KV_SERVICE_MD_NODE);
-		return gson.fromJson(metadataString, IECS_NODE_LIST_TYPE);
+		return getMetadataNodeData(null);
 	}
 
 	/**

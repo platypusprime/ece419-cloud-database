@@ -1,6 +1,7 @@
 package app_kvServer;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.BindException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -60,6 +61,7 @@ public class KVServer implements IKVServer, Runnable {
 	private final String name;
 	private final ZKWrapper zkWrapper;
 
+	private IECSNode config = null;
 	private NavigableMap<String, IECSNode> hashring = new TreeMap<>();
 
 	/**
@@ -118,10 +120,12 @@ public class KVServer implements IKVServer, Runnable {
 		while (true) { // TODO replace infinite loop
 			Collection<IECSNode> nodes = zkWrapper.getMetadataNodeData();
 
-			nodes.forEach(node -> hashring.put(node.getNodeHashRangeStart(), node));
+			setCachedMetadata(nodes);
 
 			for (IECSNode node : nodes) {
 				if (this.name.equals(node.getNodeName())) {
+					this.config = node;
+
 					this.port = node.getNodePort();
 
 					// set up cache
@@ -215,6 +219,9 @@ public class KVServer implements IKVServer, Runnable {
 			return;
 		}
 
+		// send acknowledgement to ECS
+		notifyECS();
+
 		// main accept loop
 		while (!serverSocket.isClosed()) {
 			try {
@@ -262,6 +269,18 @@ public class KVServer implements IKVServer, Runnable {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Uses this server's ZNode to communicate with the ECS (e.g. for sending
+	 * notification of startup).
+	 */
+	protected void notifyECS() {
+		try {
+			zkWrapper.updateNode(config.getBaseNodePath(), "FINISHED".getBytes("UTF-8"));
+		} catch (NullPointerException | UnsupportedEncodingException | KeeperException | InterruptedException e) {
+			log.warn("Exception while attempting to notify ECS", e);
+		}
 	}
 
 	@Override
@@ -403,5 +422,18 @@ public class KVServer implements IKVServer, Runnable {
 	public boolean moveData(String[] hashRange, String targetName) throws Exception {
 		// TODO Auto-generated method stub
 		return false;
+	}
+
+	public NavigableMap<String, IECSNode> getCachedMetadata() {
+		return hashring;
+	}
+
+	public void setCachedMetadata(Collection<IECSNode> nodes) {
+		hashring = new TreeMap<>();
+		nodes.forEach(node -> hashring.put(node.getNodeHashRangeStart(), node));
+	}
+
+	public IECSNode getCurrentConfig() {
+		return config;
 	}
 }
