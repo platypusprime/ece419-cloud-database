@@ -25,6 +25,7 @@ public class ZKWrapperTest {
 		ZKWrapper wrapper = new ZKWrapper(InetAddress.getLocalHost().getHostName(), 2181);
 		wrapper.createNode("/foo", "bar".getBytes("UTF-8"));
 		assertEquals("bar", wrapper.getNodeData("/foo"));
+		wrapper.deleteNode("/foo");
 		wrapper.close();
 	}
 

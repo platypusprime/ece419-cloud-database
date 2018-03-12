@@ -35,13 +35,13 @@ public class ZKWrapper {
 	public static final String KV_SERVICE_ROOT_NODE = "/ecs";
 
 	/** The ZNode containing shared metadata for the entire KV storage service. */
-	public static final String KV_SERVICE_MD_NODE = "/ecs/kv-metadata";
+	public static final String KV_SERVICE_MD_NODE = "/kv-metadata";
 
 	/** The ZNode containing the status of the overall KV storage service. */
-	public static final String KV_SERVICE_STATUS_NODE = "/ecs/kv-status";
+	public static final String KV_SERVICE_STATUS_NODE = "/kv-status";
 
 	/** The ZNode containing the logging level for servers to use. */
-	public static final String KV_SERVICE_LOGGING_NODE = "/ecs/kv-logging";
+	public static final String KV_SERVICE_LOGGING_NODE = "/kv-logging";
 
 	/** The name of the UTF-8 character encoding, used throughout this project. */
 	public static final String UTF_8 = "UTF-8";
@@ -168,7 +168,7 @@ public class ZKWrapper {
 	 */
 	public void createNode(String path, byte[] data) throws KeeperException, InterruptedException {
 		// TODO do a better job with ACLs
-		zookeeper.create(path, data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
+		zookeeper.create(path, data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
 	}
 
 	/**

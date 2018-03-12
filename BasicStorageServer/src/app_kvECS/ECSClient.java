@@ -1,7 +1,7 @@
 package app_kvECS;
 
 import static common.zookeeper.ZKWrapper.KV_SERVICE_LOGGING_NODE;
-import static common.zookeeper.ZKWrapper.KV_SERVICE_ROOT_NODE;
+import static common.zookeeper.ZKWrapper.KV_SERVICE_MD_NODE;
 import static common.zookeeper.ZKWrapper.KV_SERVICE_STATUS_NODE;
 import static common.zookeeper.ZKWrapper.RUNNING_STATUS;
 import static common.zookeeper.ZKWrapper.STOPPED_STATUS;
@@ -98,7 +98,6 @@ public class ECSClient implements IECSClient {
 		this.zkWrapper = zkWrapper;
 
 		try {
-			this.zkWrapper.createNode(KV_SERVICE_ROOT_NODE);
 			this.zkWrapper.createNode(KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
 			this.zkWrapper.createNode(KV_SERVICE_LOGGING_NODE, "ERROR".getBytes(UTF_8));
 			this.zkWrapper.createMetadataNode(nodes);
@@ -155,7 +154,9 @@ public class ECSClient implements IECSClient {
 		log.info("Shutting down all servers in the KV store service");
 		try {
 			// each server is responsible for removing its own ZNodes at this point
-			zkWrapper.deleteNode(KV_SERVICE_ROOT_NODE);
+			zkWrapper.deleteNode(KV_SERVICE_LOGGING_NODE);
+			zkWrapper.deleteNode(KV_SERVICE_STATUS_NODE);
+			zkWrapper.deleteNode(KV_SERVICE_MD_NODE);
 			zkWrapper.close();
 			return true;
 
