@@ -52,6 +52,7 @@ public class KVServer implements IKVServer, Runnable {
 	}
 
 	private ServerStatus status = ServerStatus.STOPPED;
+	private boolean isWriteLocked = false;
 
 	private ServerSocket serverSocket;
 	private List<ClientConnection> clients = new ArrayList<>(); // TODO handle de-registering clients
@@ -367,26 +368,24 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public void start() {
-		// TODO Auto-generated method stub
-
+		status = isWriteLocked ? ServerStatus.WRITE_LOCKED : ServerStatus.RUNNING;
 	}
 
 	@Override
 	public void stop() {
-		// TODO Auto-generated method stub
-
+		status = ServerStatus.STOPPED;
 	}
 
 	@Override
 	public void lockWrite() {
-		// TODO Auto-generated method stub
-
+		isWriteLocked = true;
+		status = status == ServerStatus.STOPPED ? status : ServerStatus.WRITE_LOCKED;
 	}
 
 	@Override
 	public void unlockWrite() {
-		// TODO Auto-generated method stub
-
+		isWriteLocked = false;
+		status = status == ServerStatus.STOPPED ? status : ServerStatus.RUNNING;
 	}
 
 	@Override
