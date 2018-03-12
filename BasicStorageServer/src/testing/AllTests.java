@@ -10,6 +10,7 @@ import testing.app_kvServer.persistence.FilePersistenceTest;
 import testing.common.messages.StreamUtilTest;
 import testing.common.zookeeper.ZKWrapperTest;
 import testing.ecs.ECSNodeTest;
+import testing.ecs.ECSClientTest;
 
 /**
  * An aggregate test suite that runs all tests for the storage server project.
@@ -26,6 +27,7 @@ import testing.ecs.ECSNodeTest;
 		FilePersistenceTest.class,
 		StreamUtilTest.class,
 		ECSNodeTest.class,
-		ZKWrapperTest.class
+		ZKWrapperTest.class,
+		ECSClientTest.class
 })
 public class AllTests {}

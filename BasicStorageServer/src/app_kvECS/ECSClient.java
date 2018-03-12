@@ -3,6 +3,7 @@ package app_kvECS;
 import static common.zookeeper.ZKWrapper.KV_SERVICE_LOGGING_NODE;
 import static common.zookeeper.ZKWrapper.KV_SERVICE_ROOT_NODE;
 import static common.zookeeper.ZKWrapper.KV_SERVICE_STATUS_NODE;
+import static common.zookeeper.ZKWrapper.KV_SERVICE_MD_NODE;
 import static common.zookeeper.ZKWrapper.RUNNING_STATUS;
 import static common.zookeeper.ZKWrapper.STOPPED_STATUS;
 import static common.zookeeper.ZKWrapper.UTF_8;
@@ -13,6 +14,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
+import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -69,7 +71,7 @@ public class ECSClient implements IECSClient {
 	private ZKWrapper zkWrapper;
 
 	// Server metadata fields
-	private Map<String, IECSNode> nodes = null;
+	private Map<String, IECSNode> nodes = new HashMap<>();
 	private NavigableMap<String, IECSNode> hashRing = new TreeMap<>();
 
 	/**
@@ -97,7 +99,6 @@ public class ECSClient implements IECSClient {
 		this.zkWrapper = zkWrapper;
 
 		try {
-			this.zkWrapper.createNode(KV_SERVICE_ROOT_NODE);
 			this.zkWrapper.createNode(KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
 			this.zkWrapper.createNode(KV_SERVICE_LOGGING_NODE, "ERROR".getBytes(UTF_8));
 			this.zkWrapper.createMetadataNode(nodes);
@@ -154,7 +155,9 @@ public class ECSClient implements IECSClient {
 		log.info("Shutting down all servers in the KV store service");
 		try {
 			// each server is responsible for removing its own ZNodes at this point
-			zkWrapper.deleteNode(KV_SERVICE_ROOT_NODE);
+			zkWrapper.deleteNode(KV_SERVICE_LOGGING_NODE);
+			zkWrapper.deleteNode(KV_SERVICE_STATUS_NODE);
+			zkWrapper.deleteNode(KV_SERVICE_MD_NODE);
 			zkWrapper.close();
 			return true;
 
