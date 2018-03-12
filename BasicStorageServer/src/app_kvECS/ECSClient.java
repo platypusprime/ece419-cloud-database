@@ -298,7 +298,7 @@ public class ECSClient implements IECSClient {
 				Iterator<IECSNode> it = awaitedNodes.iterator();
 				while (it.hasNext()) {
 					IECSNode node = it.next();
-					String ecsNodePath = node.getECSNodePath();
+					String ecsNodePath = node.getBaseNodePath();
 					try {
 						String data = zkWrapper.getNodeData(ecsNodePath);
 						if (Objects.equals(data, "FINISHED")) {
