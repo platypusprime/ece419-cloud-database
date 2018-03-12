@@ -8,11 +8,15 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.Optional;
+import java.util.TreeMap;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.apache.zookeeper.KeeperException;
 
 import app_kvServer.cache.FifoCache;
 import app_kvServer.cache.KVCache;
@@ -20,7 +24,8 @@ import app_kvServer.cache.LfuCache;
 import app_kvServer.cache.LruCache;
 import app_kvServer.persistence.FilePersistence;
 import app_kvServer.persistence.KVPersistence;
-import common.messages.KVMessage.StatusType;
+import common.zookeeper.ZKWrapper;
+import ecs.IECSNode;
 import logger.LogSetup;
 
 /**
@@ -36,7 +41,7 @@ public class KVServer implements IKVServer, Runnable {
 	private final int port;
 	private final KVCache cacheManager;
 	private final KVPersistence persistenceManager;
-	
+
 	public static enum ServerStatus {
 		/** Server running and serving all requests normally */
 		RUNNING,
@@ -45,54 +50,105 @@ public class KVServer implements IKVServer, Runnable {
 		/** Server locked for write, only get requests are served */
 		WRITE_LOCKED
 	}
-	
+
 	private ServerStatus status = ServerStatus.STOPPED;
 
 	private ServerSocket serverSocket;
 	private List<ClientConnection> clients = new ArrayList<>(); // TODO handle de-registering clients
 
+	private final String name;
+	private final ZKWrapper zkWrapper;
+
+	private NavigableMap<String, IECSNode> hashring = new TreeMap<>();
+
 	/**
-	 * Main entry point for the echo server application.
+	 * Main entry point for the key-value server application.
 	 * 
-	 * @param args contains the port number at args[0], cache size at args[1], and
-	 *            cache strategy at args[2].
+	 * @param args Contains the server name at args[0], ZooKeeper hostname at
+	 *            args[1], and ZooKeeper port at args[2].
 	 */
 	public static void main(String[] args) {
 		try {
 			if (args.length == 3) {
-				int port = Integer.parseInt(args[0]);
-				int cacheSize = Integer.parseInt(args[1]);
-				String strategy = args[2];
-				
+				String name = args[0];
+				String zkHostname = args[1];
+				int zkPort = Integer.parseInt(args[2]);
+
 				LogSetup.initialize("logs/server." + args[0] + ".log", Level.INFO, SERVER_CONSOLE_PATTERN);
-				new KVServer(port, cacheSize, strategy);
+				new KVServer(name, zkHostname, zkPort);
 			} else {
 				System.out.println("Error! Invalid number of arguments!");
-				System.out.println("Usage: KVServer <port> <cacheSize> <cacheStrategy>");
+				System.out.println("Usage: KVServer <serverName> <zkHostname> <zkPort>");
 			}
-	
+
 		} catch (IOException e) {
 			System.out.println("Error! Unable to initialize logger!");
 			e.printStackTrace();
 			System.exit(1);
-	
+
 		} catch (NumberFormatException nfe) {
-			System.out.println("Error! Invalid argument(s) <port> and/or <cacheSize>! Not a number!");
-			System.out.println("Usage: Server <port> <cacheSize> <cacheStrategy>");
+			System.out.println("Error! Invalid <zkPort>! Not a number!");
+			System.out.println("Usage: KVServer <serverName> <zkHostname> <zkPort>");
 			System.exit(1);
+
+		} catch (KeeperException | InterruptedException e) {
+			System.out.println("Error! Could not instantiate KVServer!");
+			e.printStackTrace();
 		}
 	}
 
 	/**
 	 * Start KV Server with selected name
 	 * 
-	 * @param name unique name of server
-	 * @param zkHostname hostname where zookeeper is running
-	 * @param zkPort port where zookeeper is running
+	 * @param name Unique name of server
+	 * @param zkHostname Hostname where ZooKeeper is running
+	 * @param zkPort Port where ZooKeeper is running
+	 * @throws InterruptedException
+	 * @throws KeeperException
 	 */
-	public KVServer(String name, String zkHostname, int zkPort) {
-		// TODO Auto-generated method stub
-		this(-1, -1, null);
+	public KVServer(String name, String zkHostname, int zkPort) throws KeeperException, InterruptedException {
+		if (name == null || name.isEmpty()) {
+			throw new IllegalArgumentException("Cannot instantiate server with missing name");
+		}
+		this.name = name;
+		this.zkWrapper = new ZKWrapper(zkHostname, zkPort);
+
+		// attempt to retrieve startup information from ZooKeeper
+		while (true) { // TODO replace infinite loop
+			Collection<IECSNode> nodes = zkWrapper.getMetadataNodeData();
+
+			nodes.forEach(node -> hashring.put(node.getNodeHashRangeStart(), node));
+
+			for (IECSNode node : nodes) {
+				if (name.equals(node.getNodeName())) {
+					this.port = node.getNodePort();
+
+					// set up cache
+					String strategy = node.getCacheStrategy();
+					switch (strategy) {
+					case "FIFO":
+						cacheManager = new FifoCache();
+						break;
+					case "LRU":
+						cacheManager = new LruCache();
+						break;
+					case "LFU":
+						cacheManager = new LfuCache();
+						break;
+					default:
+						cacheManager = null;
+						log.warn("Invalid caching strategy \"" + strategy + "\"; using null cache");
+						break;
+					}
+					Optional.ofNullable(cacheManager).ifPresent(cm -> cm.setCacheSize(node.getCacheSize()));
+
+					// set up storage
+					String storageIdentifier = name + "-data.csv";
+					persistenceManager = new FilePersistence(storageIdentifier);
+					return;
+				}
+			}
+		}
 	}
 
 	/**
@@ -107,6 +163,9 @@ public class KVServer implements IKVServer, Runnable {
 	 */
 	@Deprecated
 	public KVServer(int port, int cacheSize, String strategy) {
+		this.name = null;
+		this.zkWrapper = null;
+
 		// set up cache
 		switch (strategy) {
 		case "FIFO":
@@ -141,7 +200,7 @@ public class KVServer implements IKVServer, Runnable {
 		// begin execution on new thread
 		new Thread(this).start();
 	}
-	
+
 	public ServerStatus getStatus() {
 		return status;
 	}
@@ -309,25 +368,25 @@ public class KVServer implements IKVServer, Runnable {
 	@Override
 	public void start() {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void stop() {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void lockWrite() {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
 	public void unlockWrite() {
 		// TODO Auto-generated method stub
-		
+
 	}
 
 	@Override
