@@ -234,8 +234,7 @@ public class ZKWrapper {
 	 */
 	public List<IECSNode> getMetadataNodeData() throws KeeperException, InterruptedException {
 		String metadataString = getNodeData(KV_SERVICE_MD_NODE);
-		gson.fromJson(metadataString, IECS_NODE_LIST_TYPE);
-		return null;
+		return gson.fromJson(metadataString, IECS_NODE_LIST_TYPE);
 	}
 
 	/**

@@ -39,8 +39,7 @@ public class InteractionTest extends ServerTest {
 
 	/**
 	 * Sends a put request for a key-value pair and checks for a
-	 * <code>PUT_SUCCESS</code> result
-	 * from the server.
+	 * <code>PUT_SUCCESS</code> result from the server.
 	 * 
 	 * @throws Exception
 	 */

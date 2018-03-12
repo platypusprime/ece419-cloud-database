@@ -186,7 +186,7 @@ public class KVStore implements KVCommInterface {
 				}
 			}
 
-			// TODO handle case where server rejects request
+			// TODO handle case where server rejects request or is offline
 			streamUtil.sendMessage(out, message);
 
 			responseStr = streamUtil.receiveString(in);

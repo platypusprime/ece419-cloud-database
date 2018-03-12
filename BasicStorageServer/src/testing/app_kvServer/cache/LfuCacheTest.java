@@ -47,7 +47,7 @@ public class LfuCacheTest {
 	}
 
 	/**
-	 * Checks for proper LRU cache eviction behavior. Inserts 3 KV pairs into a
+	 * Checks for proper LFU cache eviction behavior. Inserts 3 KV pairs into a
 	 * FIFO cache of size 3 and performs varying numbers of reads on those pairs.
 	 * Adds a fourth pair and expects the least-read pair to be evicted.
 	 */

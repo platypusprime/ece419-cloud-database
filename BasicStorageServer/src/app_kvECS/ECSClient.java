@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -69,7 +70,7 @@ public class ECSClient implements IECSClient {
 	private ZKWrapper zkWrapper;
 
 	// Server metadata fields
-	private Map<String, IECSNode> nodes = null;
+	private Map<String, IECSNode> nodes = new HashMap<>();
 	private NavigableMap<String, IECSNode> hashRing = new TreeMap<>();
 
 	/**
