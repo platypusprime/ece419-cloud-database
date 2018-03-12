@@ -39,8 +39,8 @@ public class KVServer implements IKVServer, Runnable {
 	private static final String SERVER_CONSOLE_PATTERN = "KVServer> %m%n";
 
 	private final int port;
-	private final KVCache cacheManager;
-	private final KVPersistence persistenceManager;
+	private final KVCache cache;
+	private final KVPersistence persistence;
 
 	public static enum ServerStatus {
 		/** Server running and serving all requests normally */
@@ -121,33 +121,18 @@ public class KVServer implements IKVServer, Runnable {
 			nodes.forEach(node -> hashring.put(node.getNodeHashRangeStart(), node));
 
 			for (IECSNode node : nodes) {
-				if (name.equals(node.getNodeName())) {
+				if (this.name.equals(node.getNodeName())) {
 					this.port = node.getNodePort();
 
 					// set up cache
 					String cacheStrategy = node.getCacheStrategy();
 					int cacheSize = node.getCacheSize();
 
-					switch (cacheStrategy) {
-					case "FIFO":
-						cacheManager = new FifoCache();
-						break;
-					case "LRU":
-						cacheManager = new LruCache();
-						break;
-					case "LFU":
-						cacheManager = new LfuCache();
-						break;
-					default:
-						cacheManager = null;
-						log.warn("Invalid caching strategy \"" + cacheStrategy + "\"; using null cache");
-						break;
-					}
-					Optional.ofNullable(cacheManager).ifPresent(cm -> cm.setCacheSize(cacheSize));
+					this.cache = chooseCache(cacheStrategy, cacheSize);
 
 					// set up storage
-					String storageIdentifier = name + "-data.csv";
-					persistenceManager = new FilePersistence(storageIdentifier);
+					String storageIdentifier = this.name + "-data.csv";
+					this.persistence = new FilePersistence(storageIdentifier);
 
 					log.info("Created KVServer with "
 							+ "port=" + port + ", "
@@ -174,48 +159,52 @@ public class KVServer implements IKVServer, Runnable {
 	 */
 	@Deprecated
 	public KVServer(int port, int cacheSize, String strategy) {
-		this.name = null;
-		this.zkWrapper = null;
+
+		this.port = port;
 
 		// set up cache
-		switch (strategy) {
-		case "FIFO":
-			cacheManager = new FifoCache();
-			break;
-		case "LRU":
-			cacheManager = new LruCache();
-			break;
-		case "LFU":
-			cacheManager = new LfuCache();
-			break;
-		default:
-			cacheManager = null;
-			log.warn("Invalid caching strategy \"" + strategy + "\"; using null cache");
-			break;
-		}
-
-		Optional.ofNullable(cacheManager).ifPresent(cm -> cm.setCacheSize(cacheSize));
+		this.cache = chooseCache(strategy, cacheSize);
 
 		// set up storage
-		// TODO: choose a better format for storage file name
 		String storageIdentifier = "Server " + String.valueOf(port) + ".csv";
-		persistenceManager = new FilePersistence(storageIdentifier);
+		this.persistence = new FilePersistence(storageIdentifier);
 
 		log.info("Created KVServer with "
 				+ "port=" + port + ", "
 				+ "cacheSize=" + cacheSize + ", "
 				+ "strategy=" + strategy);
 
-		this.port = port;
+		// unused fields (M2)
+		this.name = null;
+		this.zkWrapper = null;
 
 		this.start();
-		
+
 		// begin execution on new thread
 		new Thread(this).start();
 	}
 
-	public ServerStatus getStatus() {
-		return status;
+	private KVCache chooseCache(String cacheStrategy, int cacheSize) {
+		KVCache cache;
+
+		switch (cacheStrategy) {
+		case "FIFO":
+			cache = new FifoCache();
+			break;
+		case "LRU":
+			cache = new LruCache();
+			break;
+		case "LFU":
+			cache = new LfuCache();
+			break;
+		default:
+			cache = null;
+			log.warn("Invalid caching strategy \"" + cacheStrategy + "\"; using null cache");
+			break;
+		}
+		Optional.ofNullable(cache).ifPresent(cm -> cm.setCacheSize(cacheSize));
+
+		return cache;
 	}
 
 	@Override
@@ -296,14 +285,14 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public CacheStrategy getCacheStrategy() {
-		return Optional.ofNullable(cacheManager)
+		return Optional.ofNullable(cache)
 				.map(KVCache::getCacheStrategy)
 				.orElse(CacheStrategy.None);
 	}
 
 	@Override
 	public int getCacheSize() {
-		return Optional.ofNullable(cacheManager)
+		return Optional.ofNullable(cache)
 				.map(KVCache::getCacheSize)
 				.orElse(0);
 	}
@@ -320,23 +309,23 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public synchronized boolean inStorage(String key) {
-		return persistenceManager.containsKey(key);
+		return persistence.containsKey(key);
 	}
 
 	@Override
 	public synchronized boolean inCache(String key) {
-		return Optional.ofNullable(cacheManager)
+		return Optional.ofNullable(cache)
 				.map(cm -> cm.containsKey(key))
 				.orElse(false);
 	}
 
 	@Override
 	public synchronized String getKV(String key) throws Exception {
-		return Optional.ofNullable(cacheManager)
+		return Optional.ofNullable(cache)
 				.map(cm -> cm.get(key))
 				.orElseGet(() -> {
-					String value = persistenceManager.get(key);
-					cacheManager.put(key, value);
+					String value = persistence.get(key);
+					cache.put(key, value);
 					return value;
 				});
 	}
@@ -348,20 +337,20 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public synchronized String putAndGetPrevKV(String key, String value) throws Exception {
-		Optional.ofNullable(cacheManager)
+		Optional.ofNullable(cache)
 				.ifPresent(cm -> cm.put(key, value));
-		return persistenceManager.put(key, value);
+		return persistence.put(key, value);
 	}
 
 	@Override
 	public synchronized void clearCache() {
-		Optional.ofNullable(cacheManager)
+		Optional.ofNullable(cache)
 				.ifPresent(KVCache::clear);
 	}
 
 	@Override
 	public synchronized void clearStorage() {
-		persistenceManager.clear();
+		persistence.clear();
 	}
 
 	@Override
@@ -398,6 +387,16 @@ public class KVServer implements IKVServer, Runnable {
 	public void unlockWrite() {
 		isWriteLocked = false;
 		status = status == ServerStatus.STOPPED ? status : ServerStatus.RUNNING;
+	}
+
+	/**
+	 * Returns the current status of this server.
+	 * 
+	 * @return The status
+	 * @see ServerStatus
+	 */
+	public ServerStatus getStatus() {
+		return status;
 	}
 
 	@Override
