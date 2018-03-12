@@ -436,4 +436,24 @@ public class KVServer implements IKVServer, Runnable {
 	public IECSNode getCurrentConfig() {
 		return config;
 	}
+
+	public IECSNode findSuccessor() {
+		return findSuccessor(config.getNodeHashRangeStart());
+	}
+
+	public IECSNode findSuccessor(String hash) {
+		return Optional.ofNullable(hashring.higherEntry(hash))
+				.orElse(hashring.firstEntry())
+				.getValue();
+	}
+
+	public IECSNode findPredecessor() {
+		return findPredecessor(config.getNodeHashRangeStart());
+	}
+
+	public IECSNode findPredecessor(String hash) {
+		return Optional.ofNullable(hashring.lowerEntry(hash))
+				.orElse(hashring.lastEntry())
+				.getValue();
+	}
 }
