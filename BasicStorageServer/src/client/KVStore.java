@@ -186,7 +186,7 @@ public class KVStore implements KVCommInterface {
 				}
 			}
 
-			// TODO handle case where server rejects request
+			// TODO handle case where server rejects request or is offline
 			streamUtil.sendMessage(out, message);
 
 			responseStr = streamUtil.receiveString(in);
@@ -202,10 +202,6 @@ public class KVStore implements KVCommInterface {
 				IECSNode responsibleServer = response.getResponsibleServer();
 				mdCache.updateServer(responsibleServer);
 				currentServer = responsibleServer;
-
-			} else if (response.getStatus() == StatusType.SERVER_STOPPED) {
-				// no matter where the information came from, needs to be purged
-				mdCache.invalidateServer(currentServer);
 
 			} else {
 				gotRightServer = true;

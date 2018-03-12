@@ -8,11 +8,15 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.NavigableMap;
 import java.util.Optional;
+import java.util.TreeMap;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import org.apache.zookeeper.KeeperException;
 
 import app_kvServer.cache.FifoCache;
 import app_kvServer.cache.KVCache;
@@ -20,6 +24,8 @@ import app_kvServer.cache.LfuCache;
 import app_kvServer.cache.LruCache;
 import app_kvServer.persistence.FilePersistence;
 import app_kvServer.persistence.KVPersistence;
+import common.zookeeper.ZKWrapper;
+import ecs.IECSNode;
 import logger.LogSetup;
 
 /**
@@ -33,54 +39,112 @@ public class KVServer implements IKVServer, Runnable {
 	private static final String SERVER_CONSOLE_PATTERN = "KVServer> %m%n";
 
 	private final int port;
-	private final KVCache cacheManager;
-	private final KVPersistence persistenceManager;
+	private final KVCache cache;
+	private final KVPersistence persistence;
+
+	public static enum ServerStatus {
+		/** Server running and serving all requests normally */
+		RUNNING,
+		/** Server is stopped, no requests are to be processed */
+		STOPPED,
+		/** Server locked for write, only get requests are served */
+		WRITE_LOCKED
+	}
+
+	private ServerStatus status = ServerStatus.STOPPED;
+	private boolean isWriteLocked = false;
 
 	private ServerSocket serverSocket;
 	private List<ClientConnection> clients = new ArrayList<>(); // TODO handle de-registering clients
 
+	private final String name;
+	private final ZKWrapper zkWrapper;
+
+	private NavigableMap<String, IECSNode> hashring = new TreeMap<>();
+
 	/**
-	 * Main entry point for the echo server application.
+	 * Main entry point for the key-value server application.
 	 * 
-	 * @param args contains the port number at args[0], cache size at args[1], and
-	 *            cache strategy at args[2].
+	 * @param args Contains the server name at args[0], ZooKeeper hostname at
+	 *            args[1], and ZooKeeper port at args[2].
 	 */
 	public static void main(String[] args) {
 		try {
 			if (args.length == 3) {
-				int port = Integer.parseInt(args[0]);
-				int cacheSize = Integer.parseInt(args[1]);
-				String strategy = args[2];
-				
+				String name = args[0];
+				String zkHostname = args[1];
+				int zkPort = Integer.parseInt(args[2]);
+
 				LogSetup.initialize("logs/server." + args[0] + ".log", Level.INFO, SERVER_CONSOLE_PATTERN);
-				new KVServer(port, cacheSize, strategy);
+				new KVServer(name, zkHostname, zkPort);
 			} else {
 				System.out.println("Error! Invalid number of arguments!");
-				System.out.println("Usage: KVServer <port> <cacheSize> <cacheStrategy>");
+				System.out.println("Usage: KVServer <serverName> <zkHostname> <zkPort>");
 			}
-	
+
 		} catch (IOException e) {
 			System.out.println("Error! Unable to initialize logger!");
 			e.printStackTrace();
 			System.exit(1);
-	
+
 		} catch (NumberFormatException nfe) {
-			System.out.println("Error! Invalid argument(s) <port> and/or <cacheSize>! Not a number!");
-			System.out.println("Usage: Server <port> <cacheSize> <cacheStrategy>");
+			System.out.println("Error! Invalid <zkPort>! Not a number!");
+			System.out.println("Usage: KVServer <serverName> <zkHostname> <zkPort>");
 			System.exit(1);
+
+		} catch (KeeperException | InterruptedException e) {
+			System.out.println("Error! Could not instantiate KVServer!");
+			e.printStackTrace();
 		}
 	}
 
 	/**
 	 * Start KV Server with selected name
 	 * 
-	 * @param name unique name of server
-	 * @param zkHostname hostname where zookeeper is running
-	 * @param zkPort port where zookeeper is running
+	 * @param name Unique name of server
+	 * @param zkHostname Hostname where ZooKeeper is running
+	 * @param zkPort Port where ZooKeeper is running
+	 * @throws InterruptedException
+	 * @throws KeeperException
 	 */
-	public KVServer(String name, String zkHostname, int zkPort) {
-		// TODO Auto-generated method stub
-		this(-1, -1, null);
+	public KVServer(String name, String zkHostname, int zkPort) throws KeeperException, InterruptedException {
+		if (name == null || name.isEmpty()) {
+			throw new IllegalArgumentException("Cannot instantiate server with missing name");
+		}
+		this.name = name;
+		this.zkWrapper = new ZKWrapper(zkHostname, zkPort);
+
+		// attempt to retrieve startup information from ZooKeeper
+		while (true) { // TODO replace infinite loop
+			Collection<IECSNode> nodes = zkWrapper.getMetadataNodeData();
+
+			nodes.forEach(node -> hashring.put(node.getNodeHashRangeStart(), node));
+
+			for (IECSNode node : nodes) {
+				if (this.name.equals(node.getNodeName())) {
+					this.port = node.getNodePort();
+
+					// set up cache
+					String cacheStrategy = node.getCacheStrategy();
+					int cacheSize = node.getCacheSize();
+
+					this.cache = chooseCache(cacheStrategy, cacheSize);
+
+					// set up storage
+					String storageIdentifier = this.name + "-data.csv";
+					this.persistence = new FilePersistence(storageIdentifier);
+
+					log.info("Created KVServer with "
+							+ "port=" + port + ", "
+							+ "cacheSize=" + cacheSize + ", "
+							+ "strategy=" + cacheStrategy);
+
+					// begin execution on new thread
+					new Thread(this).start();
+					return;
+				}
+			}
+		}
 	}
 
 	/**
@@ -95,39 +159,52 @@ public class KVServer implements IKVServer, Runnable {
 	 */
 	@Deprecated
 	public KVServer(int port, int cacheSize, String strategy) {
-		// set up cache
-		switch (strategy) {
-		case "FIFO":
-			cacheManager = new FifoCache();
-			break;
-		case "LRU":
-			cacheManager = new LruCache();
-			break;
-		case "LFU":
-			cacheManager = new LfuCache();
-			break;
-		default:
-			cacheManager = null;
-			log.warn("Invalid caching strategy \"" + strategy + "\"; using null cache");
-			break;
-		}
 
-		Optional.ofNullable(cacheManager).ifPresent(cm -> cm.setCacheSize(cacheSize));
+		this.port = port;
+
+		// set up cache
+		this.cache = chooseCache(strategy, cacheSize);
 
 		// set up storage
-		// TODO: choose a better format for storage file name
 		String storageIdentifier = "Server " + String.valueOf(port) + ".csv";
-		persistenceManager = new FilePersistence(storageIdentifier);
+		this.persistence = new FilePersistence(storageIdentifier);
 
 		log.info("Created KVServer with "
 				+ "port=" + port + ", "
 				+ "cacheSize=" + cacheSize + ", "
 				+ "strategy=" + strategy);
 
-		this.port = port;
+		// unused fields (M2)
+		this.name = null;
+		this.zkWrapper = null;
+
+		this.start();
 
 		// begin execution on new thread
 		new Thread(this).start();
+	}
+
+	private KVCache chooseCache(String cacheStrategy, int cacheSize) {
+		KVCache cache;
+
+		switch (cacheStrategy) {
+		case "FIFO":
+			cache = new FifoCache();
+			break;
+		case "LRU":
+			cache = new LruCache();
+			break;
+		case "LFU":
+			cache = new LfuCache();
+			break;
+		default:
+			cache = null;
+			log.warn("Invalid caching strategy \"" + cacheStrategy + "\"; using null cache");
+			break;
+		}
+		Optional.ofNullable(cache).ifPresent(cm -> cm.setCacheSize(cacheSize));
+
+		return cache;
 	}
 
 	@Override
@@ -208,14 +285,14 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public CacheStrategy getCacheStrategy() {
-		return Optional.ofNullable(cacheManager)
+		return Optional.ofNullable(cache)
 				.map(KVCache::getCacheStrategy)
 				.orElse(CacheStrategy.None);
 	}
 
 	@Override
 	public int getCacheSize() {
-		return Optional.ofNullable(cacheManager)
+		return Optional.ofNullable(cache)
 				.map(KVCache::getCacheSize)
 				.orElse(0);
 	}
@@ -232,23 +309,23 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public synchronized boolean inStorage(String key) {
-		return persistenceManager.containsKey(key);
+		return persistence.containsKey(key);
 	}
 
 	@Override
 	public synchronized boolean inCache(String key) {
-		return Optional.ofNullable(cacheManager)
+		return Optional.ofNullable(cache)
 				.map(cm -> cm.containsKey(key))
 				.orElse(false);
 	}
 
 	@Override
 	public synchronized String getKV(String key) throws Exception {
-		return Optional.ofNullable(cacheManager)
+		return Optional.ofNullable(cache)
 				.map(cm -> cm.get(key))
 				.orElseGet(() -> {
-					String value = persistenceManager.get(key);
-					cacheManager.put(key, value);
+					String value = persistence.get(key);
+					cache.put(key, value);
 					return value;
 				});
 	}
@@ -260,20 +337,20 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public synchronized String putAndGetPrevKV(String key, String value) throws Exception {
-		Optional.ofNullable(cacheManager)
+		Optional.ofNullable(cache)
 				.ifPresent(cm -> cm.put(key, value));
-		return persistenceManager.put(key, value);
+		return persistence.put(key, value);
 	}
 
 	@Override
 	public synchronized void clearCache() {
-		Optional.ofNullable(cacheManager)
+		Optional.ofNullable(cache)
 				.ifPresent(KVCache::clear);
 	}
 
 	@Override
 	public synchronized void clearStorage() {
-		persistenceManager.clear();
+		persistence.clear();
 	}
 
 	@Override
@@ -292,26 +369,34 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public void start() {
-		// TODO Auto-generated method stub
-		
+		status = isWriteLocked ? ServerStatus.WRITE_LOCKED : ServerStatus.RUNNING;
 	}
 
 	@Override
 	public void stop() {
-		// TODO Auto-generated method stub
-		
+		status = ServerStatus.STOPPED;
 	}
 
 	@Override
 	public void lockWrite() {
-		// TODO Auto-generated method stub
-		
+		isWriteLocked = true;
+		status = status == ServerStatus.STOPPED ? status : ServerStatus.WRITE_LOCKED;
 	}
 
 	@Override
 	public void unlockWrite() {
-		// TODO Auto-generated method stub
-		
+		isWriteLocked = false;
+		status = status == ServerStatus.STOPPED ? status : ServerStatus.RUNNING;
+	}
+
+	/**
+	 * Returns the current status of this server.
+	 * 
+	 * @return The status
+	 * @see ServerStatus
+	 */
+	public ServerStatus getStatus() {
+		return status;
 	}
 
 	@Override

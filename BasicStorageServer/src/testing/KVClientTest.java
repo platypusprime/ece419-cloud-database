@@ -432,7 +432,7 @@ public class KVClientTest extends LogInstrumentingTest {
 	}
 
 	/**
-	 * Tests client handling of a failure status in the server response for an
+	 * Tests client handling of a failure status in the server response for a
 	 * retrieval request.
 	 * 
 	 * @throws Exception For mocking
@@ -482,8 +482,8 @@ public class KVClientTest extends LogInstrumentingTest {
 	}
 
 	/**
-	 * Tests the functionality of the logLevel CLI command when extra tokens are
-	 * provided in addition to valid input.
+	 * Tests the functionality of the <code>logLevel</code> CLI command when extra
+	 * tokens are provided in addition to valid input.
 	 */
 	@Test
 	public void testLogLevelExtraArgs() {

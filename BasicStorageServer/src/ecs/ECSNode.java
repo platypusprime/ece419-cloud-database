@@ -103,7 +103,11 @@ public class ECSNode implements IECSNode {
 			return true;
 		}
 
-		if (start.compareTo(end) > 0) {
+		int compareTo = start.compareTo(end);
+		if (compareTo == 0) {
+			// one-server service
+			return true;
+		} else if (compareTo > 0) {
 			// no wrap-around
 			return hash.compareTo(start) <= 0 && hash.compareTo(end) > 0;
 		} else {

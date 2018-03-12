@@ -21,7 +21,7 @@ public class ZKWrapperTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void sanityTest() throws Exception {
+	public void testSetGet() throws Exception {
 		ZKWrapper wrapper = new ZKWrapper(InetAddress.getLocalHost().getHostName(), 2181);
 		wrapper.createNode("/foo", "bar".getBytes("UTF-8"));
 		assertEquals("bar", wrapper.getNodeData("/foo"));
