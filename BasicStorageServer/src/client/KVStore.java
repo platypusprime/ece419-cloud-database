@@ -203,10 +203,6 @@ public class KVStore implements KVCommInterface {
 				mdCache.updateServer(responsibleServer);
 				currentServer = responsibleServer;
 
-			} else if (response.getStatus() == StatusType.SERVER_STOPPED) {
-				// no matter where the information came from, needs to be purged
-				mdCache.invalidateServer(currentServer);
-
 			} else {
 				gotRightServer = true;
 			}

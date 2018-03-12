@@ -125,8 +125,10 @@ public class KVServer implements IKVServer, Runnable {
 					this.port = node.getNodePort();
 
 					// set up cache
-					String strategy = node.getCacheStrategy();
-					switch (strategy) {
+					String cacheStrategy = node.getCacheStrategy();
+					int cacheSize = node.getCacheSize();
+
+					switch (cacheStrategy) {
 					case "FIFO":
 						cacheManager = new FifoCache();
 						break;
@@ -138,14 +140,22 @@ public class KVServer implements IKVServer, Runnable {
 						break;
 					default:
 						cacheManager = null;
-						log.warn("Invalid caching strategy \"" + strategy + "\"; using null cache");
+						log.warn("Invalid caching strategy \"" + cacheStrategy + "\"; using null cache");
 						break;
 					}
-					Optional.ofNullable(cacheManager).ifPresent(cm -> cm.setCacheSize(node.getCacheSize()));
+					Optional.ofNullable(cacheManager).ifPresent(cm -> cm.setCacheSize(cacheSize));
 
 					// set up storage
 					String storageIdentifier = name + "-data.csv";
 					persistenceManager = new FilePersistence(storageIdentifier);
+
+					log.info("Created KVServer with "
+							+ "port=" + port + ", "
+							+ "cacheSize=" + cacheSize + ", "
+							+ "strategy=" + cacheStrategy);
+
+					// begin execution on new thread
+					new Thread(this).start();
 					return;
 				}
 			}
@@ -198,6 +208,8 @@ public class KVServer implements IKVServer, Runnable {
 
 		this.port = port;
 
+		this.start();
+		
 		// begin execution on new thread
 		new Thread(this).start();
 	}
