@@ -58,7 +58,7 @@ public class ECSClient implements IECSClient {
 	private static final String ECS_CONFIG_DELIMITER = " ";
 
 	// Server startup script
-	private static final String SERVER_INITIALIZATION_COMMAND = "ssh -n %s nohup java -jar m2-server.jar %s %d &";
+	private static final String SERVER_INITIALIZATION_COMMAND = "ssh -n %s nohup java -jar m2-server.jar %s %s %d &";
 
 	// Timeout constants
 	private static final int NODE_STARTUP_TIMEOUT = 15 * 1000;
@@ -114,7 +114,7 @@ public class ECSClient implements IECSClient {
 	 * @param node The metadata for the server to initialize
 	 */
 	private void startupNode(IECSNode node) {
-		String command = String.format(SERVER_INITIALIZATION_COMMAND, node.getNodeHost(), zkHostname, zkPort);
+		String command = String.format(SERVER_INITIALIZATION_COMMAND, node.getNodeHost(),  node.getNodeName(), zkHostname, zkPort);
 
 		log.info("Starting server using SSH: " + command);
 		try {
