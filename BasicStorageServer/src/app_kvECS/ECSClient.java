@@ -479,7 +479,6 @@ public class ECSClient implements IECSClient {
 			stop();
 
 		} else if (tokens[0].equals("shutdown")) {
-			shutdown();
 			return true;
 
 		} else if (tokens[0].equals("add")) {
