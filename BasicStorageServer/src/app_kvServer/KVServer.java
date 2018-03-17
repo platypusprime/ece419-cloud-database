@@ -15,9 +15,13 @@ import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
 
+import org.apache.zookeeper.Watcher.Event.EventType;
+
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
 
 import app_kvServer.cache.FifoCache;
 import app_kvServer.cache.KVCache;
@@ -221,6 +225,9 @@ public class KVServer implements IKVServer, Runnable {
 
 		// send acknowledgement to ECS
 		notifyECS();
+		
+		// setup sync for server status with KV service global status
+		syncServerStatus();
 
 		// main accept loop
 		while (!serverSocket.isClosed()) {
@@ -280,6 +287,32 @@ public class KVServer implements IKVServer, Runnable {
 			zkWrapper.updateNode(config.getBaseNodePath(), "FINISHED".getBytes("UTF-8"));
 		} catch (NullPointerException | UnsupportedEncodingException | KeeperException | InterruptedException e) {
 			log.warn("Exception while attempting to notify ECS", e);
+		}
+	}
+	
+	private void syncServerStatus() {
+		try {
+			String kvStatus = zkWrapper.getNodeData(ZKWrapper.KV_SERVICE_STATUS_NODE, new Watcher() {
+
+				@Override
+				public void process(WatchedEvent event) {
+					if (event.getType() == EventType.NodeDataChanged) {
+						syncServerStatus();
+					}
+				}
+			});
+			
+			if (kvStatus.equals(ZKWrapper.RUNNING_STATUS)) {
+				this.status = ServerStatus.RUNNING;
+			}
+			else if (kvStatus.equals(ZKWrapper.STOPPED_STATUS)) {
+				this.status = ServerStatus.STOPPED;
+			}
+			
+			log.info("Server status changed to: " + kvStatus);
+			
+		} catch (KeeperException | InterruptedException e) {
+			log.warn("Exception while checking KV Service status", e);
 		}
 	}
 
