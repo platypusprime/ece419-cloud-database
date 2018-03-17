@@ -491,7 +491,7 @@ public class ECSClient implements IECSClient {
 				log.error("Invalid number of arguments (usage: add <count>(optional) <cacheStrategy> <cacheSize>)");
 			}
 
-		} else if (tokens[0].equals("removeNodes")) {
+		} else if (tokens[0].equals("remove")) {
 			if (tokens.length > 1) {
 				String[] names = Arrays.copyOfRange(tokens, 1, tokens.length);
 				removeNodes(Arrays.asList(names));
