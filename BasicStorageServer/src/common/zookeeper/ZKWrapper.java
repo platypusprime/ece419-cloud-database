@@ -253,6 +253,22 @@ public class ZKWrapper {
 
 	/**
 	 * Updates the data of the specified ZNode.
+	 *
+	 * @param path The path of the ZNode to update
+	 * @param data The UTF-8 string data to set
+	 * @throws KeeperException If the ZooKeeper server signals an error
+	 * @throws InterruptedException If the transaction is interrupted
+	 */
+	public void updateNode(String path, String data) {
+		try {
+			updateNode(path, data.getBytes("UTF-8"));
+		} catch (Exception e) {
+			log.error("Exception while attempting to update ECS node: " + path, e);
+		}
+	}
+
+	/**
+	 * Updates the data of the specified ZNode.
 	 * 
 	 * @param path The path of the ZNode to update
 	 * @param data The data to set
