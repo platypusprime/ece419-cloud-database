@@ -7,7 +7,6 @@ import java.net.Socket;
 
 import org.apache.log4j.Logger;
 
-import common.HashUtil;
 import common.messages.BasicKVMessage;
 import common.messages.KVMessage;
 import common.messages.KVMessage.StatusType;
@@ -163,28 +162,12 @@ public class KVStore implements KVCommInterface {
 	 *             communicating with the server
 	 */
 	private KVMessage sendMessage(KVMessage message) throws Exception {
-		String keyHash = HashUtil.toMD5(message.getKey());
 		String responseStr;
 		KVMessage response = null;
 		boolean gotRightServer = false;
 
 		// keep contacting servers until the right one gets hit
 		while (!gotRightServer) {
-			boolean gotServerFromCache = false;
-
-			// check if the current server is thought to be able to handle the request
-			if (currentServer.containsHash(keyHash)) {
-				gotServerFromCache = true;
-
-			} else {
-				IECSNode serverFromCache = mdCache.findServer(keyHash);
-				if (serverFromCache != null) {
-					disconnect();
-					currentServer = serverFromCache;
-					connect();
-					gotServerFromCache = true;
-				}
-			}
 
 			// TODO handle case where server rejects request or is offline
 			streamUtil.sendMessage(out, message);
@@ -194,14 +177,15 @@ public class KVStore implements KVCommInterface {
 
 			if (response.getStatus() == StatusType.SERVER_NOT_RESPONSIBLE) {
 				// cached information for the selected server is stale; purge it from the cache
-				if (gotServerFromCache) {
-					mdCache.invalidateServer(currentServer);
-				}
+				mdCache.invalidateServer(currentServer);
 
 				// update metadata for new server
 				IECSNode responsibleServer = response.getResponsibleServer();
 				mdCache.updateServer(responsibleServer);
+				
+				disconnect();
 				currentServer = responsibleServer;
+				connect();
 
 			} else {
 				gotRightServer = true;
