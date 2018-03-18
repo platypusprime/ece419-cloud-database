@@ -123,7 +123,7 @@ public class KVServer implements IKVServer, Runnable {
 
 		// attempt to retrieve startup information from ZooKeeper
 		while (true) { // TODO replace infinite loop
-			Collection<IECSNode> nodes = zkWrapper.getMetadataNodeData(new ServiceTopologyWatcher(this, zkWrapper));
+			Collection<IECSNode> nodes = zkWrapper.getMetadataNodeData();
 
 			setCachedMetadata(nodes);
 
@@ -290,6 +290,15 @@ public class KVServer implements IKVServer, Runnable {
 			log.warn("Exception while attempting to notify ECS", e);
 		}
 	}
+
+	private void initMetadataListener() {
+        try {
+            zkWrapper.getMetadataNodeData(new ServiceTopologyWatcher(this, zkWrapper));
+        } catch (KeeperException | InterruptedException e) {
+            log.error("Error while setting listener on metadata node", e);
+        }
+    }
+
 	
 	private void syncServerStatus() {
 		try {
@@ -300,6 +309,8 @@ public class KVServer implements IKVServer, Runnable {
 					if (event.getType() == EventType.NodeDataChanged) {
 						syncServerStatus();
 					}
+
+                    // Shutdown server if its node has been deleted
 					else if (event.getType() == EventType.NodeDeleted) {
 					    kill();
                     }
@@ -308,6 +319,8 @@ public class KVServer implements IKVServer, Runnable {
 			
 			if (kvStatus.equals(ZKWrapper.RUNNING_STATUS)) {
 				this.status = ServerStatus.RUNNING;
+				// Only set listener on metadata node once the server has started
+                initMetadataListener();
 			}
 			else if (kvStatus.equals(ZKWrapper.STOPPED_STATUS)) {
 				this.status = ServerStatus.STOPPED;
