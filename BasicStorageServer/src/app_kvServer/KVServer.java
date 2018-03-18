@@ -11,6 +11,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
@@ -122,7 +123,7 @@ public class KVServer implements IKVServer, Runnable {
 
 		// attempt to retrieve startup information from ZooKeeper
 		while (true) { // TODO replace infinite loop
-			Collection<IECSNode> nodes = zkWrapper.getMetadataNodeData();
+			Collection<IECSNode> nodes = zkWrapper.getMetadataNodeData(new ServiceTopologyWatcher(this, zkWrapper));
 
 			setCachedMetadata(nodes);
 
@@ -464,6 +465,12 @@ public class KVServer implements IKVServer, Runnable {
 	public void setCachedMetadata(Collection<IECSNode> nodes) {
 		hashring = new TreeMap<>();
 		nodes.forEach(node -> hashring.put(node.getNodeHashRangeStart(), node));
+		
+		for (IECSNode node : nodes) {
+			if (this.name.equals(node.getNodeName())) {
+				this.config = node;
+			}
+		}
 	}
 
 	public IECSNode getCurrentConfig() {
@@ -488,5 +495,27 @@ public class KVServer implements IKVServer, Runnable {
 		return Optional.ofNullable(hashring.lowerEntry(hash))
 				.orElse(hashring.lastEntry())
 				.getValue();
+	}
+	
+	/**
+	 * Identifies the server which is responsible for the given hash, given the
+	 * information available to this cache.
+	 * 
+	 * @param keyHash The MD5 hash for the key to find a server for
+	 * @return The server matching the key,
+	 *         or <code>null</code> if the cache is empty
+	 */
+	public IECSNode findServer(String keyHash) {
+
+		if (hashring.isEmpty())
+			return null;
+
+		return Optional
+				// find the first server past the key in the hash ring
+				.ofNullable(hashring.ceilingEntry(keyHash))
+				.map(Map.Entry::getValue)
+
+				// otherwise use the first server (guaranteed to exist because of above check)
+				.orElse(hashring.firstEntry().getValue());
 	}
 }

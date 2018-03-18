@@ -89,7 +89,7 @@ public class KVMessageDeserializer implements JsonDeserializer<KVMessage> {
 		JsonElement responsibleNodeElement = json.get(RESPONSIBLE_NODE_ATTR);
 		IECSNode metadata = context.deserialize(responsibleNodeElement, ECSNode.class);
 
-		return new MetadataUpdateMessage(metadata, status);
+		return new MetadataUpdateMessage(metadata);
 	}
 
 	/**

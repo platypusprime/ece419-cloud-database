@@ -1,5 +1,6 @@
 package client;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
@@ -44,6 +45,11 @@ public class ServerMetadataCache {
 
 				// otherwise use the first server (guaranteed to exist because of above check)
 				.orElse(metadataCache.firstEntry().getValue());
+	}
+	
+	public void setCachedMetadata(Collection<IECSNode> nodes) {
+		metadataCache.clear();
+		nodes.forEach(node -> metadataCache.put(node.getNodeHashRangeStart(), node));
 	}
 
 	/**
