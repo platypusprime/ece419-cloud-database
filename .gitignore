@@ -21,4 +21,4 @@
 *.pdf
 
 # ZooKeeper files
-/BasicStorageServer/zookeeper/**
+/BasicStorageServer/zookeeper*
