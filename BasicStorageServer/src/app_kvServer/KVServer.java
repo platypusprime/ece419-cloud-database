@@ -300,6 +300,9 @@ public class KVServer implements IKVServer, Runnable {
 					if (event.getType() == EventType.NodeDataChanged) {
 						syncServerStatus();
 					}
+					else if (event.getType() == EventType.NodeDeleted) {
+					    kill();
+                    }
 				}
 			});
 			
@@ -408,7 +411,7 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public void kill() {
-		System.exit(1); // immediately shutdown the JVM
+		System.exit(0); // immediately shutdown the JVM
 	}
 
 	@Override
