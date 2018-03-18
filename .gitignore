@@ -10,6 +10,7 @@
 *.csv
 
 # IDE/project artifacts
+.idea
 *.classpath
 *.metadata
 *.settings
