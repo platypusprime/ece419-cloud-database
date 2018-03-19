@@ -75,4 +75,30 @@ public class HashUtil {
 		return hash != null && hash.matches("[0-9a-f]{32}");
 	}
 
+	public static boolean containsHash(String hash, String[] range) {
+		String start = range[0];
+		String end = range[1];
+
+		if (!HashUtil.validateHash(hash)) {
+			return false;
+		}
+
+		// no end value corresponds to full hash circle
+		if (end == null) {
+			return true;
+		}
+
+		int compareTo = start.compareTo(end);
+		if (compareTo == 0) {
+			// one-server service
+			return true;
+		} else if (compareTo > 0) {
+			// no wrap-around
+			return hash.compareTo(start) <= 0 && hash.compareTo(end) > 0;
+		} else {
+			// wrap-around
+			return hash.compareTo(start) <= 0 || hash.compareTo(end) > 0;
+		}
+	}
+
 }
