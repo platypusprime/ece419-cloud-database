@@ -194,6 +194,17 @@ public class ZKWrapper {
 		createNode(KV_SERVICE_MD_NODE, serializeMetadataMap(nodes));
 	}
 
+	public List<String> getChildNodes(String path, Watcher watcher) {
+		List<String> children = null;
+		try {
+			children = zookeeper.getChildren(path, watcher);
+		} catch (KeeperException | InterruptedException e) {
+			log.error(String.format("Error while reading child nodes for '%s'", path), e);
+		}
+
+		return children;
+	}
+
 	/**
 	 * Retrieves the data contained in the specified ZNode.
 	 * 
