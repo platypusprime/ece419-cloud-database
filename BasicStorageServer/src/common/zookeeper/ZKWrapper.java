@@ -353,4 +353,7 @@ public class ZKWrapper {
 		}
 	}
 
+	public String getZNodePathForMigration(String src, String target) {
+		return String.format("/%s/migration/%s", target, src);
+	}
 }
