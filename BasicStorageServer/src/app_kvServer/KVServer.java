@@ -399,13 +399,17 @@ public class KVServer implements IKVServer, Runnable {
 				});
 	}
 
+	public synchronized Map<String, String> getAllKV() {
+	    return persistence.getAll();
+    }
+
 	@Override
-	public synchronized void putKV(String key, String value) throws Exception {
+	public synchronized void putKV(String key, String value) {
 		putAndGetPrevKV(key, value);
 	}
 
 	@Override
-	public synchronized String putAndGetPrevKV(String key, String value) throws Exception {
+	public synchronized String putAndGetPrevKV(String key, String value) {
 		Optional.ofNullable(cache)
 				.ifPresent(cm -> cm.put(key, value));
 		return persistence.put(key, value);
