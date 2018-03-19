@@ -283,7 +283,7 @@ public class ZKWrapper {
 	 */
 	public void updateNode(String path, String data) {
 		try {
-			updateNode(path, data.getBytes("UTF-8"));
+			updateNode(path, data.getBytes(UTF_8));
 		} catch (Exception e) {
 			log.error("Exception while attempting to update ECS node: " + path, e);
 		}
