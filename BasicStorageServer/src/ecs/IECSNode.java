@@ -59,6 +59,28 @@ public interface IECSNode {
 	}
 
 	/**
+	 * Returns the path for the ZNode used for receiving migrated data from other servers
+	 *
+	 * @return The ZNode path for migration
+	 */
+	public default String getMigrationNodePath() {
+		return getZNodePath("migration");
+	}
+
+	public default String getMigrationNodePath(String peer) {
+	    return getMigrationNodePath() + "/" + peer;
+    }
+
+	/**
+	 * Returns the path for the ZNode used for receiving replicated data from other servers
+	 *
+	 * @return The ZNode path for replication
+	 */
+	public default String getReplicationNodePath() {
+		return getZNodePath("replication");
+	}
+
+	/**
 	 * Returns the path for the ZNode used for communications between the ECS and
 	 * the associated server.
 	 * 
