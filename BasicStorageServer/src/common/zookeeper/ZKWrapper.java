@@ -64,11 +64,6 @@ public class ZKWrapper {
 	 */
 	public static final String READY_FOR_SHUTDOWN = "READY_FOR_SHUTDOWN";
 
-	/**
-	 * The status string indicating that a data migration operation has been completed.
-	 */
-	public static final String TRANSFER_COMPLETED = "TRANSFER_COMPLETED";
-
 	/** The type for IECSNode lists. Used for deserialization. */
 	public static final Type IECS_NODE_LIST_TYPE = new TypeToken<List<IECSNode>>() {}.getType();
 
