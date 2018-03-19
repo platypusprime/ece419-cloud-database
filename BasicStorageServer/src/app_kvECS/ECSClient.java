@@ -272,10 +272,15 @@ public class ECSClient implements IECSClient {
 			nodes.put(node.getNodeName(), node);
 			hashRing.put(node.getNodeHashRangeStart(), node);
 
-			// create a node for communications between the ECS and this node
 			try {
+				// Create a node for communications between the ECS and this node
 				zkWrapper.createNode(node.getBaseNodePath());
 				zkWrapper.createNode(node.getECSNodePath());
+
+				// Create nodes for migrating and replicating data to and from other servers
+				zkWrapper.createNode(node.getMigrationNodePath());
+				zkWrapper.createNode(node.getReplicationNodePath());
+
 			} catch (KeeperException | InterruptedException e) {
 				log.error("Could not create ZNode with path " + node.getECSNodePath(), e);
 			}
@@ -365,7 +370,11 @@ public class ECSClient implements IECSClient {
 		// signal shutdown to removed nodes
 		for (IECSNode removedNode : removedNodes) {
 			try {
+				zkWrapper.deleteNode(removedNode.getMigrationNodePath());
+				zkWrapper.deleteNode(removedNode.getReplicationNodePath());
+				zkWrapper.deleteNode(removedNode.getECSNodePath());
 				zkWrapper.deleteNode(removedNode.getBaseNodePath());
+				log.info("Removed ZNode " + removedNode.getBaseNodePath());
 			} catch (KeeperException | InterruptedException e) {
 				log.error("Could not delete ZNode for node " + removedNode, e);
 			}
