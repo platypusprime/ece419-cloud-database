@@ -189,7 +189,7 @@ public class ECSClient implements IECSClient {
 		// await server response
 		boolean gotResponse = false;
 		try {
-			gotResponse = awaitNodes(count, NODE_STARTUP_TIMEOUT);
+			gotResponse = awaitNodes(nodes, NODE_STARTUP_TIMEOUT);
 		} catch (Exception e) {
 			log.warn("Exception occured while awaiting response from " + count + " nodes", e);
 		}
@@ -292,9 +292,20 @@ public class ECSClient implements IECSClient {
 
 	@Override
 	public boolean awaitNodes(int count, int timeout) throws Exception {
+		return true;
+	}
+
+	public boolean awaitNodes(Collection<IECSNode> awaitedN, int timeout) throws Exception {
+		// Create copy in order to not modify the original one
+		Collection<IECSNode> awaitedNodes = new HashSet<>(awaitedN);
+
+		int count = awaitedNodes.size();
 		AtomicInteger numResponses = new AtomicInteger(0);
-		List<IECSNode> awaitedNodes = new ArrayList<>(
-				nodes.entrySet().stream().map(Map.Entry::getValue).collect(Collectors.toList()));
+
+		// Log info message
+		StringBuilder infoMessage = new StringBuilder("Waiting for response from nodes: ");
+		awaitedNodes.forEach(n -> infoMessage.append(n.getNodeName()).append(" "));
+		log.info(infoMessage.toString());
 
 		// TODO improve parallelism (maybe with watches?)
 		Thread awaitThread = new Thread(() -> {
@@ -308,6 +319,7 @@ public class ECSClient implements IECSClient {
 						String data = zkWrapper.getNodeData(ecsNodePath);
 						if (Objects.equals(data, "FINISHED")) {
 							numResponses.incrementAndGet();
+							log.info("Received response from node " + node.getNodeName());
 							zkWrapper.updateNode(ecsNodePath, new byte[0]);
 							it.remove();
 						}
@@ -358,7 +370,7 @@ public class ECSClient implements IECSClient {
 		int numNodesChanged = removedNodes.size() + successorNodes.size();
 		boolean gotResponses = false;
 		try {
-			gotResponses = awaitNodes(numNodesChanged, SERVICE_RESIZE_TIMEOUT);
+			gotResponses = awaitNodes(removedNodes, SERVICE_RESIZE_TIMEOUT);
 		} catch (Exception e) {
 			log.error("Exception occured while awaiting responses from " + numNodesChanged, e);
 			return false;
