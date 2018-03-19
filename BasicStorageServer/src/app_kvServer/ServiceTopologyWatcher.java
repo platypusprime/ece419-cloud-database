@@ -88,11 +88,12 @@ public class ServiceTopologyWatcher implements Watcher {
 		if (removedNodes.contains(server.getCurrentConfig())) {
 			try {
                 // Migrate data to successor server
+                server.lockWrite();
 				IECSNode successor = server.findSuccessor();
 				server.moveData(self.getNodeHashRange(), successor.getNodeName());
 
 				// Notify ECS with about transfer completion
-                zkSession.updateNode(self.getBaseNodePath(), ZKWrapper.TRANSFER_COMPLETED);
+                zkSession.updateNode(self.getBaseNodePath(), "FINISHED");
 
 			} catch (Exception e) {
 				log.error("Could not move data from pending server deletion", e);
@@ -111,15 +112,22 @@ public class ServiceTopologyWatcher implements Watcher {
 			currentPredecessor = server.findPredecessor(currentPredecessor.getNodeHashRangeStart());
 		}
 
-		// Send (partial) transfers to the newly added direct predecessors
-		for (IECSNode predecessor: predecessors) {
-		    // TODO: Do in individual threads
-			try {
-				server.moveData(predecessor.getNodeHashRange(), predecessor.getNodeName());
-			} catch (Exception e) {
-				log.error("Failed to transfer data to " + predecessor, e);
-			}
-		}
+		if (!predecessors.isEmpty()) {
+            // Send (partial) transfers to the newly added direct predecessors
+            server.lockWrite();
+            for (IECSNode predecessor : predecessors) {
+                // TODO: Do in individual threads
+                try {
+                    server.moveData(predecessor.getNodeHashRange(), predecessor.getNodeName());
+                } catch (Exception e) {
+                    log.error("Failed to transfer data to " + predecessor, e);
+                }
+            }
+            server.unlockWrite();
+        }
+
+        // TODO: Remove this
+        zkSession.updateNode(self.getBaseNodePath(), "FINISHED");
 
 	}
 }
