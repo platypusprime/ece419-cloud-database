@@ -16,6 +16,7 @@ import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
 
+import app_kvServer.migration.MigrationManager;
 import org.apache.zookeeper.Watcher.Event.EventType;
 
 import org.apache.log4j.Level;
@@ -123,7 +124,7 @@ public class KVServer implements IKVServer, Runnable {
 
 		// attempt to retrieve startup information from ZooKeeper
 		while (true) { // TODO replace infinite loop
-			Collection<IECSNode> nodes = zkWrapper.getMetadataNodeData();
+			Collection<IECSNode> nodes = zkWrapper.getMetadataNodeData(new ServiceTopologyWatcher(this, zkWrapper));
 
 			setCachedMetadata(nodes);
 
@@ -224,10 +225,13 @@ public class KVServer implements IKVServer, Runnable {
 			return;
 		}
 
-		// send acknowledgement to ECS
+		// Check if any data is waiting to be migrated from other nodes
+		readMigrationNode();
+
+		// Send acknowledgement to ECS
 		notifyECS();
 		
-		// setup sync for server status with KV service global status
+		// Setup sync for server status with KV service global status
 		syncServerStatus();
 
 		// main accept loop
@@ -291,15 +295,25 @@ public class KVServer implements IKVServer, Runnable {
 		}
 	}
 
-	private void initMetadataListener() {
-        try {
-            zkWrapper.getMetadataNodeData(new ServiceTopologyWatcher(this, zkWrapper));
-        } catch (KeeperException | InterruptedException e) {
-            log.error("Error while setting listener on metadata node", e);
+    private void readMigrationNode() {
+        List<String> childNodes = zkWrapper.getChildNodes(config.getMigrationNodePath(), new Watcher() {
+            @Override
+            public void process(WatchedEvent watchedEvent) {
+                if (watchedEvent.getType() == EventType.NodeChildrenChanged) {
+                    readMigrationNode();
+                }
+            }
+        });
+
+        if (childNodes == null) {
+            log.warn("Child nodes for " + config.getMigrationNodePath() + " is NULL");
+            return;
         }
+
+        // Receive migrated data from other servers
+        MigrationManager.receiveData(childNodes, zkWrapper, this);
     }
 
-	
 	private void syncServerStatus() {
 		try {
 			String kvStatus = zkWrapper.getNodeData(ZKWrapper.KV_SERVICE_STATUS_NODE, new Watcher() {
@@ -319,8 +333,6 @@ public class KVServer implements IKVServer, Runnable {
 			
 			if (kvStatus.equals(ZKWrapper.RUNNING_STATUS)) {
 				this.status = ServerStatus.RUNNING;
-				// Only set listener on metadata node once the server has started
-                initMetadataListener();
 			}
 			else if (kvStatus.equals(ZKWrapper.STOPPED_STATUS)) {
 				this.status = ServerStatus.STOPPED;
@@ -473,9 +485,8 @@ public class KVServer implements IKVServer, Runnable {
 	}
 
 	@Override
-	public boolean moveData(String[] hashRange, String targetName) throws Exception {
-		// TODO Auto-generated method stub
-		return false;
+	public boolean moveData(String[] hashRange, String targetName) {
+	    return MigrationManager.sendData(hashRange, targetName, zkWrapper, this);
 	}
 
 	public NavigableMap<String, IECSNode> getCachedMetadata() {
