@@ -58,7 +58,7 @@ public class ECSClient implements IECSClient {
 	private static final String ECS_CONFIG_DELIMITER = " ";
 
 	// Server startup script
-	private static final String SERVER_INITIALIZATION_COMMAND = "ssh -n %s nohup java -jar m2-server.jar %s %d &";
+	private static final String SERVER_INITIALIZATION_COMMAND = "ssh -n %s nohup java -jar m2-server.jar %s %s %d &";
 
 	// Timeout constants
 	private static final int NODE_STARTUP_TIMEOUT = 15 * 1000;
@@ -114,7 +114,7 @@ public class ECSClient implements IECSClient {
 	 * @param node The metadata for the server to initialize
 	 */
 	private void startupNode(IECSNode node) {
-		String command = String.format(SERVER_INITIALIZATION_COMMAND, node.getNodeHost(), zkHostname, zkPort);
+		String command = String.format(SERVER_INITIALIZATION_COMMAND, node.getNodeHost(),  node.getNodeName(), zkHostname, zkPort);
 
 		log.info("Starting server using SSH: " + command);
 		try {
@@ -189,7 +189,7 @@ public class ECSClient implements IECSClient {
 		// await server response
 		boolean gotResponse = false;
 		try {
-			gotResponse = awaitNodes(count, NODE_STARTUP_TIMEOUT);
+			gotResponse = awaitNodes(nodes, NODE_STARTUP_TIMEOUT);
 		} catch (Exception e) {
 			log.warn("Exception occured while awaiting response from " + count + " nodes", e);
 		}
@@ -272,10 +272,15 @@ public class ECSClient implements IECSClient {
 			nodes.put(node.getNodeName(), node);
 			hashRing.put(node.getNodeHashRangeStart(), node);
 
-			// create a node for communications between the ECS and this node
 			try {
+				// Create a node for communications between the ECS and this node
 				zkWrapper.createNode(node.getBaseNodePath());
 				zkWrapper.createNode(node.getECSNodePath());
+
+				// Create nodes for migrating and replicating data to and from other servers
+				zkWrapper.createNode(node.getMigrationNodePath());
+				zkWrapper.createNode(node.getReplicationNodePath());
+
 			} catch (KeeperException | InterruptedException e) {
 				log.error("Could not create ZNode with path " + node.getECSNodePath(), e);
 			}
@@ -287,9 +292,20 @@ public class ECSClient implements IECSClient {
 
 	@Override
 	public boolean awaitNodes(int count, int timeout) throws Exception {
+		return true;
+	}
+
+	public boolean awaitNodes(Collection<IECSNode> awaitedN, int timeout) throws Exception {
+		// Create copy in order to not modify the original one
+		Collection<IECSNode> awaitedNodes = new HashSet<>(awaitedN);
+
+		int count = awaitedNodes.size();
 		AtomicInteger numResponses = new AtomicInteger(0);
-		List<IECSNode> awaitedNodes = new ArrayList<>(
-				nodes.entrySet().stream().map(Map.Entry::getValue).collect(Collectors.toList()));
+
+		// Log info message
+		StringBuilder infoMessage = new StringBuilder("Waiting for response from nodes: ");
+		awaitedNodes.forEach(n -> infoMessage.append(n.getNodeName()).append(" "));
+		log.info(infoMessage.toString());
 
 		// TODO improve parallelism (maybe with watches?)
 		Thread awaitThread = new Thread(() -> {
@@ -303,6 +319,7 @@ public class ECSClient implements IECSClient {
 						String data = zkWrapper.getNodeData(ecsNodePath);
 						if (Objects.equals(data, "FINISHED")) {
 							numResponses.incrementAndGet();
+							log.info("Received response from node " + node.getNodeName());
 							zkWrapper.updateNode(ecsNodePath, new byte[0]);
 							it.remove();
 						}
@@ -353,7 +370,7 @@ public class ECSClient implements IECSClient {
 		int numNodesChanged = removedNodes.size() + successorNodes.size();
 		boolean gotResponses = false;
 		try {
-			gotResponses = awaitNodes(numNodesChanged, SERVICE_RESIZE_TIMEOUT);
+			gotResponses = awaitNodes(removedNodes, SERVICE_RESIZE_TIMEOUT);
 		} catch (Exception e) {
 			log.error("Exception occured while awaiting responses from " + numNodesChanged, e);
 			return false;
@@ -365,7 +382,11 @@ public class ECSClient implements IECSClient {
 		// signal shutdown to removed nodes
 		for (IECSNode removedNode : removedNodes) {
 			try {
+				zkWrapper.deleteNode(removedNode.getMigrationNodePath());
+				zkWrapper.deleteNode(removedNode.getReplicationNodePath());
+				zkWrapper.deleteNode(removedNode.getECSNodePath());
 				zkWrapper.deleteNode(removedNode.getBaseNodePath());
+				log.info("Removed ZNode " + removedNode.getBaseNodePath());
 			} catch (KeeperException | InterruptedException e) {
 				log.error("Could not delete ZNode for node " + removedNode, e);
 			}
@@ -479,7 +500,6 @@ public class ECSClient implements IECSClient {
 			stop();
 
 		} else if (tokens[0].equals("shutdown")) {
-			shutdown();
 			return true;
 
 		} else if (tokens[0].equals("add")) {
@@ -491,7 +511,7 @@ public class ECSClient implements IECSClient {
 				log.error("Invalid number of arguments (usage: add <count>(optional) <cacheStrategy> <cacheSize>)");
 			}
 
-		} else if (tokens[0].equals("removeNodes")) {
+		} else if (tokens[0].equals("remove")) {
 			if (tokens.length > 1) {
 				String[] names = Arrays.copyOfRange(tokens, 1, tokens.length);
 				removeNodes(Arrays.asList(names));

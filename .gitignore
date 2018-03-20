@@ -10,6 +10,7 @@
 *.csv
 
 # IDE/project artifacts
+.idea
 *.classpath
 *.metadata
 *.settings
@@ -21,4 +22,4 @@
 *.pdf
 
 # ZooKeeper files
-/BasicStorageServer/zookeeper/**
+/BasicStorageServer/zookeeper*

@@ -58,6 +58,12 @@ public class ZKWrapper {
 	 */
 	public static final String RUNNING_STATUS = "RUNNING";
 
+	/**
+	 * The status string indicating that a given server is ready for shutdown.
+	 * Used for indicating that all cleanup operations such as data migration has been completed.
+	 */
+	public static final String READY_FOR_SHUTDOWN = "READY_FOR_SHUTDOWN";
+
 	/** The type for IECSNode lists. Used for deserialization. */
 	public static final Type IECS_NODE_LIST_TYPE = new TypeToken<List<IECSNode>>() {}.getType();
 
@@ -183,6 +189,17 @@ public class ZKWrapper {
 		createNode(KV_SERVICE_MD_NODE, serializeMetadataMap(nodes));
 	}
 
+	public List<String> getChildNodes(String path, Watcher watcher) {
+		List<String> children = null;
+		try {
+			children = zookeeper.getChildren(path, watcher);
+		} catch (KeeperException | InterruptedException e) {
+			log.error(String.format("Error while reading child nodes for '%s'", path), e);
+		}
+
+		return children;
+	}
+
 	/**
 	 * Retrieves the data contained in the specified ZNode.
 	 * 
@@ -253,6 +270,22 @@ public class ZKWrapper {
 
 	/**
 	 * Updates the data of the specified ZNode.
+	 *
+	 * @param path The path of the ZNode to update
+	 * @param data The UTF-8 string data to set
+	 * @throws KeeperException If the ZooKeeper server signals an error
+	 * @throws InterruptedException If the transaction is interrupted
+	 */
+	public void updateNode(String path, String data) {
+		try {
+			updateNode(path, data.getBytes(UTF_8));
+		} catch (Exception e) {
+			log.error("Exception while attempting to update ECS node: " + path, e);
+		}
+	}
+
+	/**
+	 * Updates the data of the specified ZNode.
 	 * 
 	 * @param path The path of the ZNode to update
 	 * @param data The data to set
@@ -315,4 +348,7 @@ public class ZKWrapper {
 		}
 	}
 
+	public String getZNodePathForMigration(String src, String target) {
+		return String.format("/%s/migration/%s", target, src);
+	}
 }

@@ -8,10 +8,13 @@ import java.net.Socket;
 import org.apache.log4j.Logger;
 
 import app_kvServer.KVServer.ServerStatus;
+import common.HashUtil;
 import common.messages.BasicKVMessage;
 import common.messages.KVMessage;
+import common.messages.MetadataUpdateMessage;
 import common.messages.KVMessage.StatusType;
 import common.messages.StreamUtil;
+import ecs.IECSNode;
 
 /**
  * The class oversees a single server-side client connection session. When run
@@ -82,10 +85,23 @@ public class ClientConnection implements Runnable {
 					outStatus = StatusType.SERVER_STOPPED;
 				}
 				else {
+					outKey = request.getKey();
+					
+					// Check if server is responsible for this key
+					String keyHash = HashUtil.toMD5(outKey);
+					if (!server.getCurrentConfig().containsHash(keyHash)) {
+						
+						// Send metadata update message containing info for the server that is responsible for this key
+						IECSNode correctServer = server.findServer(keyHash);
+						MetadataUpdateMessage msg = new MetadataUpdateMessage(correctServer);
+						streamUtil.sendMessage(out, msg);
+						log.info("Sent Metadata response: " + correctServer);
+						continue;
+					}
+					
 					switch (request.getStatus()) {
 					case GET:
 						try {
-							outKey = request.getKey();
 							outValue = server.getKV(request.getKey());
 							if (outValue != null) {
 								outStatus = StatusType.GET_SUCCESS;
@@ -107,7 +123,6 @@ public class ClientConnection implements Runnable {
 						}
 						boolean keyExists = server.inCache(request.getKey()) || server.inStorage(request.getKey());
 						boolean valueEmpty = request.getValue() == null || request.getValue().isEmpty();
-						outKey = request.getKey();
 						outValue = request.getValue();
 						try {
 							server.putKV(request.getKey(), request.getValue());
