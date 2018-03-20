@@ -28,7 +28,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -57,17 +56,12 @@ public class ECSClient implements IECSClient {
 	private static final String ECS_CONFIG_FILENAME = "ecs.config";
 	private static final String ECS_CONFIG_DELIMITER = " ";
 
-	// Server startup script
-	private static final String SERVER_INITIALIZATION_COMMAND = "ssh -n %s nohup java -jar m2-server.jar %s %s %d &";
-
 	// Timeout constants
 	private static final int NODE_STARTUP_TIMEOUT = 15 * 1000;
 	private static final int SERVICE_RESIZE_TIMEOUT = 30 * 1000;
 
-	// ZooKeeper fields
-	private final String zkHostname;
-	private final int zkPort;
 	private ZKWrapper zkWrapper;
+	private final ServerInitializer serverInitializer;
 
 	// Server metadata fields
 	private Map<String, IECSNode> nodes = new HashMap<>();
@@ -81,21 +75,19 @@ public class ECSClient implements IECSClient {
 	 * @param zkPort The port number used by the ZooKeeper service
 	 */
 	public ECSClient(String zkHostname, int zkPort) {
-		this(zkHostname, zkPort, new ZKWrapper(zkHostname, zkPort));
+		this(new ZKWrapper(zkHostname, zkPort), new SshServerInitializer(zkHostname, zkPort));
 	}
 
 	/**
 	 * Initializes an ECS service and connects it to the specified ZooKeeper service
 	 * using the specified wrapper. Provided in order to allow for mocking.
 	 * 
-	 * @param zkHostname The hostname used by the ZooKeeper service
-	 * @param zkPort The port number used by the ZooKeeper service
 	 * @param zkWrapper The wrapper class used to access ZooKeeper functionality
+	 * @param serverInitializer The initializer responsible for starting up servers
 	 */
-	public ECSClient(String zkHostname, int zkPort, ZKWrapper zkWrapper) {
-		this.zkHostname = zkHostname;
-		this.zkPort = zkPort;
+	public ECSClient(ZKWrapper zkWrapper, ServerInitializer serverInitializer) {
 		this.zkWrapper = zkWrapper;
+		this.serverInitializer = serverInitializer;
 
 		try {
 			this.zkWrapper.createNode(KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
@@ -106,23 +98,6 @@ public class ECSClient implements IECSClient {
 			log.error("Could not create ECS nodes", e);
 		}
 
-	}
-
-	/**
-	 * Uses SSH to instantiate a server process using the given server metadata.
-	 * 
-	 * @param node The metadata for the server to initialize
-	 */
-	private void startupNode(IECSNode node) {
-		String command = String.format(SERVER_INITIALIZATION_COMMAND, node.getNodeHost(),  node.getNodeName(), zkHostname, zkPort);
-
-		log.info("Starting server using SSH: " + command);
-		try {
-			Runtime.getRuntime().exec(command);
-			log.info("KVServer process started");
-		} catch (IOException e) {
-			log.error("I/O exception while executing node startup command", e);
-		}
 	}
 
 	@Override
@@ -183,7 +158,11 @@ public class ECSClient implements IECSClient {
 
 		// start up each server process using SSH commands
 		for (IECSNode node : nodes) {
-			startupNode(node);
+			try {
+				serverInitializer.initializeServer(node);
+			} catch (ServerInitializationException e) {
+				log.warn("Could not initialize server", e);
+			}
 		}
 
 		// await server response
