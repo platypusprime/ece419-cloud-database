@@ -60,4 +60,14 @@ public class LogSetup {
 		rootLogger.setLevel(level);
 	}
 
+	/**
+	 * Removes all appenders from the root logger and sets its log level to
+	 * <code>ERROR</code>.
+	 */
+	public static void teardown() {
+		Logger rootLogger = Logger.getRootLogger();
+		rootLogger.removeAllAppenders();
+		rootLogger.setLevel(Level.ERROR);
+	}
+
 }
