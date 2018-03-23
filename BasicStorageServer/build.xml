@@ -131,7 +131,8 @@
   <!-- ========= ZooKeeper targets END ========= -->
 
   <!-- Group all dependencies into a big dependency-all.jar -->
-  <target name="copy-dependencies" depends="resolve" description="consolidates dependencies in one jar">
+  <target name="lib-jar" depends="resolve" description="consolidates dependencies in one jar">
+    <delete file="${dependencies.jar.file}" />
     <jar jarfile="${dependencies.jar.file}">
       <zipgroupfileset dir="${lib.dir}">
         <include name="**/*.jar" />
@@ -139,7 +140,7 @@
     </jar>
   </target>
 
-  <target name="init" depends="resolve">
+  <target name="init">
     <mkdir dir="${build.dir}"/>
     <copy includeemptydirs="false" todir="${build.dir}">
       <fileset dir="${src.dir}">
@@ -158,6 +159,7 @@
     <delete file="${ecsjar.file}" />
     <delete file="${ecsmanifest.file}" />
     <delete file="${dependencies.jar.file}" />
+    <delete dir="${lib.dir}" />
   </target>
 
   <target name="cleanall" depends="clean"/>
@@ -173,7 +175,7 @@
   </target>
 
   <!-- build client jar -->
-  <target name="build-client-jar" depends="build, copy-dependencies">
+  <target name="build-client-jar" depends="build">
     <delete file="${clientjar.file}" />
     <delete file="${clientmanifest.file}" />
 
@@ -190,7 +192,7 @@
   </target>
 
   <!-- build server jar -->
-  <target name="build-server-jar" depends="build, copy-dependencies">
+  <target name="build-server-jar" depends="build">
     <delete file="${serverjar.file}" />
     <delete file="${servermanifest.file}" />
 
@@ -207,7 +209,7 @@
   </target>
 
   <!-- build ecs jar -->
-  <target name="build-ecs-jar" depends="build, copy-dependencies">
+  <target name="build-ecs-jar" depends="build">
     <delete file="${ecsjar.file}" />
     <delete file="${ecsmanifest.file}" />
 
