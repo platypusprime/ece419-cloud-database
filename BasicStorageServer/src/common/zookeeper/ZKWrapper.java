@@ -16,6 +16,7 @@ import org.apache.zookeeper.Watcher;
 import org.apache.zookeeper.Watcher.Event.KeeperState;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.KeeperException.Code;
 import org.apache.zookeeper.data.Stat;
 
 import com.google.gson.Gson;
@@ -174,7 +175,16 @@ public class ZKWrapper {
 	 */
 	public void createNode(String path, byte[] data) throws KeeperException, InterruptedException {
 		// TODO do a better job with ACLs
-		zookeeper.create(path, data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+		try {
+			zookeeper.create(path, data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+		} catch (KeeperException e) {
+			if (e.code() == Code.NODEEXISTS) {
+				log.debug("ZNode " + path + " already exists");
+				updateNode(path, data);
+			} else {
+				throw e;
+			}
+		}
 	}
 
 	/**
