@@ -240,11 +240,8 @@ public class ECSClient implements IECSClient {
 			return null;
 		}
 
-		// note that node selection is not deterministic due to using default source of
-		// randomness
-		Collections.shuffle(availableNodes);
 		Collection<IECSNode> selectedNodes = new ArrayList<>(availableNodes.subList(0, count));
-		log.info("Selected " + count + " nodes randomly from " + availableNodes.size() + " available");
+		log.info("Selected " + count + " nodes from " + availableNodes.size() + " available");
 
 		// add new nodes to ECS
 		selectedNodes.stream().forEach(node -> {
