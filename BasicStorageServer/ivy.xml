@@ -5,6 +5,7 @@
     	<conf name="test" visibility="public" extends="compile" />
 	</configurations>
     <dependencies>
+        <dependency org="org.slf4j" name="slf4j-api" rev="1.7.12"/>
         <dependency org="org.apache.zookeeper" name="zookeeper" rev="3.4.11" conf="compile->*" />
         <dependency org="com.google.code.gson" name="gson" rev="2.8.2" conf="compile->*" />
         <dependency org="log4j" name="log4j" rev="1.2.17" conf="compile->*" />

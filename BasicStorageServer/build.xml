@@ -85,6 +85,10 @@
   <target name="resolve" description="retrieve dependencies with ivy" depends="init-ivy">
     <ivy:retrieve />
   </target>
+
+  <target name="dependency-tree" description="prints the ivy dependency tree" depends="resolve">
+    <ivy:dependencytree />
+  </target>
   <!-- ========= Ivy targets END ========= -->
 
   <!-- ========= ZooKeeper targets START ========= -->
