@@ -1,5 +1,6 @@
 package app_kvServer;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.BindException;
@@ -7,6 +8,7 @@ import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,8 +44,6 @@ import logger.LogSetup;
 public class KVServer implements IKVServer, Runnable {
 
 	private static final Logger log = Logger.getLogger(KVServer.class);
-
-	private static final String SERVER_CONSOLE_PATTERN = "KVServer> %m%n";
 
 	private final int port;
 	private final KVCache cache;
@@ -83,7 +83,12 @@ public class KVServer implements IKVServer, Runnable {
 				String zkHostname = args[1];
 				int zkPort = Integer.parseInt(args[2]);
 
-				LogSetup.initialize("logs/server." + args[0] + ".log", Level.INFO, SERVER_CONSOLE_PATTERN);
+				String jarpath = new File(KVServer.class.getProtectionDomain().getCodeSource()
+						.getLocation().toURI().getPath()).getParent();
+				LogSetup.initialize(jarpath + "/logs/" + args[0] + ".log", Level.INFO);
+				log.info("Initializing server with arguments name=" + name
+						+ " zkHostname=" + zkHostname
+						+ " zkPort=" + zkPort);
 				new KVServer(name, zkHostname, zkPort);
 			} else {
 				System.out.println("Error! Invalid number of arguments!");
@@ -102,6 +107,9 @@ public class KVServer implements IKVServer, Runnable {
 
 		} catch (KeeperException | InterruptedException e) {
 			System.out.println("Error! Could not instantiate KVServer!");
+			e.printStackTrace();
+		} catch (URISyntaxException e) {
+			System.out.println("Error! Could not identify the jar directory");
 			e.printStackTrace();
 		}
 	}
