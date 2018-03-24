@@ -1,32 +1,30 @@
 package testing.ecs;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
-
 import static common.zookeeper.ZKSession.KV_SERVICE_STATUS_NODE;
 import static common.zookeeper.ZKSession.RUNNING_STATUS;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
-import java.util.Collection;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Map;
 
-import org.junit.Test;
+import org.apache.zookeeper.KeeperException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
-import org.apache.zookeeper.KeeperException;
+import org.junit.Test;
 
 import app_kvECS.ECSClient;
-import ecs.ECSNode;
-import ecs.IECSNode;
+import app_kvECS.IECSClient;
 import common.HashUtil;
 import common.zookeeper.ZKSession;
+import ecs.IECSNode;
 
 
 /**
- * Tests operations related to the {@link IECSCLient} implementation, including
+ * Tests operations related to the {@link IECSClient} implementation, including
  * creation and serialization/deserialization.
  */
 public class ECSClientTest {
