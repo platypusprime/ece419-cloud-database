@@ -1,11 +1,11 @@
 package app_kvECS;
 
-import static common.zookeeper.ZKWrapper.KV_SERVICE_LOGGING_NODE;
-import static common.zookeeper.ZKWrapper.KV_SERVICE_MD_NODE;
-import static common.zookeeper.ZKWrapper.KV_SERVICE_STATUS_NODE;
-import static common.zookeeper.ZKWrapper.RUNNING_STATUS;
-import static common.zookeeper.ZKWrapper.STOPPED_STATUS;
-import static common.zookeeper.ZKWrapper.UTF_8;
+import static common.zookeeper.ZKSession.KV_SERVICE_LOGGING_NODE;
+import static common.zookeeper.ZKSession.KV_SERVICE_MD_NODE;
+import static common.zookeeper.ZKSession.KV_SERVICE_STATUS_NODE;
+import static common.zookeeper.ZKSession.RUNNING_STATUS;
+import static common.zookeeper.ZKSession.STOPPED_STATUS;
+import static common.zookeeper.ZKSession.UTF_8;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -34,7 +34,7 @@ import org.apache.log4j.Logger;
 import org.apache.zookeeper.KeeperException;
 
 import common.HashUtil;
-import common.zookeeper.ZKWrapper;
+import common.zookeeper.ZKSession;
 import ecs.ECSNode;
 import ecs.IECSNode;
 import logger.LogSetup;
@@ -60,7 +60,7 @@ public class ECSClient implements IECSClient {
 	private static final int NODE_STARTUP_TIMEOUT = 15 * 1000;
 	private static final int SERVICE_RESIZE_TIMEOUT = 30 * 1000;
 
-	private ZKWrapper zkWrapper;
+	private ZKSession zkSession;
 	private final ServerInitializer serverInitializer;
 
 	// Server metadata fields
@@ -75,7 +75,7 @@ public class ECSClient implements IECSClient {
 	 * @param zkPort The port number used by the ZooKeeper service
 	 */
 	public ECSClient(String zkHostname, int zkPort) {
-		this(new ZKWrapper(zkHostname, zkPort), new SshServerInitializer(zkHostname, zkPort));
+		this(new ZKSession(zkHostname, zkPort), new SshServerInitializer(zkHostname, zkPort));
 	}
 
 	/**
@@ -85,14 +85,14 @@ public class ECSClient implements IECSClient {
 	 * @param zkWrapper The wrapper class used to access ZooKeeper functionality
 	 * @param serverInitializer The initializer responsible for starting up servers
 	 */
-	public ECSClient(ZKWrapper zkWrapper, ServerInitializer serverInitializer) {
-		this.zkWrapper = zkWrapper;
+	public ECSClient(ZKSession zkWrapper, ServerInitializer serverInitializer) {
+		this.zkSession = zkWrapper;
 		this.serverInitializer = serverInitializer;
 
 		try {
-			this.zkWrapper.createNode(KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
-			this.zkWrapper.createNode(KV_SERVICE_LOGGING_NODE, "ERROR".getBytes(UTF_8));
-			this.zkWrapper.createMetadataNode(nodes);
+			this.zkSession.createNode(KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
+			this.zkSession.createNode(KV_SERVICE_LOGGING_NODE, "ERROR".getBytes(UTF_8));
+			this.zkSession.createMetadataNode(nodes);
 
 		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
 			log.error("Exception while creating global ZNodes", e);
@@ -104,7 +104,7 @@ public class ECSClient implements IECSClient {
 	public boolean start() {
 		log.info("Starting all servers in the KV store service");
 		try {
-			zkWrapper.updateNode(KV_SERVICE_STATUS_NODE, RUNNING_STATUS.getBytes(UTF_8));
+			zkSession.updateNode(KV_SERVICE_STATUS_NODE, RUNNING_STATUS.getBytes(UTF_8));
 			return true;
 		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
 			log.error("Could not update status node", e);
@@ -116,7 +116,7 @@ public class ECSClient implements IECSClient {
 	public boolean stop() {
 		log.info("Stopping all servers in the KV store service");
 		try {
-			zkWrapper.updateNode(KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
+			zkSession.updateNode(KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
 			return true;
 		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
 			log.error("Could not update status node", e);
@@ -129,10 +129,10 @@ public class ECSClient implements IECSClient {
 		log.info("Shutting down all servers in the KV store service");
 		try {
 			// each server is responsible for removing its own ZNodes at this point
-			zkWrapper.deleteNode(KV_SERVICE_LOGGING_NODE);
-			zkWrapper.deleteNode(KV_SERVICE_STATUS_NODE);
-			zkWrapper.deleteNode(KV_SERVICE_MD_NODE);
-			zkWrapper.close();
+			zkSession.deleteNode(KV_SERVICE_LOGGING_NODE);
+			zkSession.deleteNode(KV_SERVICE_STATUS_NODE);
+			zkSession.deleteNode(KV_SERVICE_MD_NODE);
+			zkSession.close();
 			return true;
 
 		} catch (KeeperException | InterruptedException e) {
@@ -250,12 +250,12 @@ public class ECSClient implements IECSClient {
 
 			try {
 				// Create a node for communications between the ECS and this node
-				zkWrapper.createNode(node.getBaseNodePath());
-				zkWrapper.createNode(node.getECSNodePath());
+				zkSession.createNode(node.getBaseNodePath());
+				zkSession.createNode(node.getECSNodePath());
 
 				// Create nodes for migrating and replicating data to and from other servers
-				zkWrapper.createNode(node.getMigrationNodePath());
-				zkWrapper.createNode(node.getReplicationNodePath());
+				zkSession.createNode(node.getMigrationNodePath());
+				zkSession.createNode(node.getReplicationNodePath());
 
 			} catch (KeeperException | InterruptedException e) {
 				log.error("Could not create ZNode with path " + node.getECSNodePath(), e);
@@ -292,11 +292,11 @@ public class ECSClient implements IECSClient {
 					IECSNode node = it.next();
 					String ecsNodePath = node.getBaseNodePath();
 					try {
-						String data = zkWrapper.getNodeData(ecsNodePath);
+						String data = zkSession.getNodeData(ecsNodePath);
 						if (Objects.equals(data, "FINISHED")) {
 							numResponses.incrementAndGet();
 							log.info("Received response from node " + node.getNodeName());
-							zkWrapper.updateNode(ecsNodePath, new byte[0]);
+							zkSession.updateNode(ecsNodePath, new byte[0]);
 							it.remove();
 						}
 					} catch (KeeperException | InterruptedException e) {
@@ -358,10 +358,10 @@ public class ECSClient implements IECSClient {
 		// signal shutdown to removed nodes
 		for (IECSNode removedNode : removedNodes) {
 			try {
-				zkWrapper.deleteNode(removedNode.getMigrationNodePath());
-				zkWrapper.deleteNode(removedNode.getReplicationNodePath());
-				zkWrapper.deleteNode(removedNode.getECSNodePath());
-				zkWrapper.deleteNode(removedNode.getBaseNodePath());
+				zkSession.deleteNode(removedNode.getMigrationNodePath());
+				zkSession.deleteNode(removedNode.getReplicationNodePath());
+				zkSession.deleteNode(removedNode.getECSNodePath());
+				zkSession.deleteNode(removedNode.getBaseNodePath());
 				log.info("Removed ZNode " + removedNode.getBaseNodePath());
 			} catch (KeeperException | InterruptedException e) {
 				log.error("Could not delete ZNode for node " + removedNode, e);
@@ -415,7 +415,7 @@ public class ECSClient implements IECSClient {
 		}
 
 		try {
-			zkWrapper.updateMetadataNode(nodes);
+			zkSession.updateMetadataNode(nodes);
 		} catch (KeeperException | InterruptedException e) {
 			log.error("Could not update metadata ZNode data", e);
 		}

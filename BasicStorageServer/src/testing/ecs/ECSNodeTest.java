@@ -13,7 +13,7 @@ import org.junit.Test;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import common.zookeeper.ZKWrapper;
+import common.zookeeper.ZKSession;
 import ecs.ECSNode;
 import ecs.IECSNode;
 import ecs.IECSNodeDeserializer;
@@ -94,7 +94,7 @@ public class ECSNodeTest {
 		assertNotNull(serialized);
 
 		// deserialize and check that all fields are preserved
-		List<IECSNode> deserializedList = gson.fromJson(serialized, ZKWrapper.IECS_NODE_LIST_TYPE);
+		List<IECSNode> deserializedList = gson.fromJson(serialized, ZKSession.IECS_NODE_LIST_TYPE);
 		assertEquals(1, deserializedList.size());
 		IECSNode deserializedNode = deserializedList.get(0);
 		assertEquals("server-foo", deserializedNode.getNodeName());

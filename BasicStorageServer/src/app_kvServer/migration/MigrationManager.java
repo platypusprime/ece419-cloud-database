@@ -3,7 +3,7 @@ package app_kvServer.migration;
 import app_kvServer.KVServer;
 import app_kvServer.persistence.KVPersistence;
 import common.HashUtil;
-import common.zookeeper.ZKWrapper;
+import common.zookeeper.ZKSession;
 import ecs.IECSNode;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.KeeperException;
@@ -20,13 +20,13 @@ public class MigrationManager {
 
     private static Map<String, MigrationReceiveTask> receiveTasks = new HashMap<>();
 
-    public static synchronized void receiveData(List<String> srcServerNames, ZKWrapper zkWrapper, KVServer server) {
+    public static synchronized void receiveData(List<String> srcServerNames, ZKSession zkSession, KVServer server) {
         IECSNode config = server.getCurrentConfig();
 
         for (String serverName: srcServerNames) {
             if (!receiveTasks.containsKey(serverName)) {
                 String zNodePath = config.getMigrationNodePath(serverName);
-                MigrationReceiveTask task = new MigrationReceiveTask(zNodePath, zkWrapper, server);
+                MigrationReceiveTask task = new MigrationReceiveTask(zNodePath, zkSession, server);
                 receiveTasks.put(serverName, task);
             }
 
@@ -37,7 +37,7 @@ public class MigrationManager {
         }
     }
 
-    public static synchronized boolean sendData(String[] hashRange, String targetName, ZKWrapper zkWrapper, KVServer server) {
+    public static synchronized boolean sendData(String[] hashRange, String targetName, ZKSession zkSession, KVServer server) {
         log.info("Sending data to " + targetName);
 
         Map<String, String> kvPairs = server.getAllKV();
@@ -49,19 +49,19 @@ public class MigrationManager {
         MigrationMessage message = new MigrationMessage(null, null, null, 0, 0, kvPairs);
         String data = message.toJSON();
 
-        String targetNode = zkWrapper.getZNodePathForMigration(server.getCurrentConfig().getNodeName(), targetName);
+        String targetNode = zkSession.getZNodePathForMigration(server.getCurrentConfig().getNodeName(), targetName);
 
         try {
             // Send message via znode
-            zkWrapper.createNode(targetNode);
-            zkWrapper.updateNode(targetNode, data);
+            zkSession.createNode(targetNode);
+            zkSession.updateNode(targetNode, data);
 
             // Busy-wait for response
-            String response = zkWrapper.getNodeData(targetNode);
+            String response = zkSession.getNodeData(targetNode);
             while (response != null && !response.isEmpty()) {
-                response = zkWrapper.getNodeData(targetNode);
+                response = zkSession.getNodeData(targetNode);
             }
-            zkWrapper.deleteNode(targetNode);
+            zkSession.deleteNode(targetNode);
 
             // Remove sent data from own persistence
             kvPairs.forEach((k, v) -> server.putKV(k, null));

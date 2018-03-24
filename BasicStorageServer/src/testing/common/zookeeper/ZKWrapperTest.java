@@ -6,7 +6,7 @@ import java.net.InetAddress;
 
 import org.junit.Test;
 
-import common.zookeeper.ZKWrapper;
+import common.zookeeper.ZKSession;
 
 /**
  * Tests the functionality of the ZooKeeper wrapper layer.
@@ -22,11 +22,11 @@ public class ZKWrapperTest {
 	 */
 	@Test
 	public void testSetGet() throws Exception {
-		ZKWrapper wrapper = new ZKWrapper(InetAddress.getLocalHost().getHostName(), 2181);
-		wrapper.createNode("/foo", "bar".getBytes("UTF-8"));
-		assertEquals("bar", wrapper.getNodeData("/foo"));
-		wrapper.deleteNode("/foo");
-		wrapper.close();
+		ZKSession session = new ZKSession(InetAddress.getLocalHost().getHostName(), 2181);
+		session.createNode("/foo", "bar".getBytes("UTF-8"));
+		assertEquals("bar", session.getNodeData("/foo"));
+		session.deleteNode("/foo");
+		session.close();
 	}
 
 }

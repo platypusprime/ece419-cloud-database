@@ -32,7 +32,7 @@ import app_kvServer.cache.LruCache;
 import app_kvServer.migration.MigrationManager;
 import app_kvServer.persistence.FilePersistence;
 import app_kvServer.persistence.KVPersistence;
-import common.zookeeper.ZKWrapper;
+import common.zookeeper.ZKSession;
 import ecs.IECSNode;
 import logger.LogSetup;
 
@@ -64,7 +64,7 @@ public class KVServer implements IKVServer, Runnable {
 	private List<ClientConnection> clients = new ArrayList<>(); // TODO handle de-registering clients
 
 	private final String name;
-	private final ZKWrapper zkWrapper;
+	private final ZKSession zkSession;
 
 	private IECSNode config = null;
 	private NavigableMap<String, IECSNode> hashring = new TreeMap<>();
@@ -127,11 +127,11 @@ public class KVServer implements IKVServer, Runnable {
 			throw new IllegalArgumentException("Cannot instantiate server with missing name");
 		}
 		this.name = name;
-		this.zkWrapper = new ZKWrapper(zkHostname, zkPort);
+		this.zkSession = new ZKSession(zkHostname, zkPort);
 
 		// attempt to retrieve startup information from ZooKeeper
 		while (true) { // TODO replace infinite loop
-			Collection<IECSNode> nodes = zkWrapper.getMetadataNodeData(new ServiceTopologyWatcher(this, zkWrapper));
+			Collection<IECSNode> nodes = zkSession.getMetadataNodeData(new ServiceTopologyWatcher(this, zkSession));
 
 			setCachedMetadata(nodes);
 
@@ -193,7 +193,7 @@ public class KVServer implements IKVServer, Runnable {
 
 		// unused fields (M2)
 		this.name = null;
-		this.zkWrapper = null;
+		this.zkSession = null;
 
 		this.start();
 
@@ -296,14 +296,14 @@ public class KVServer implements IKVServer, Runnable {
 	 */
 	protected void notifyECS() {
 		try {
-			zkWrapper.updateNode(config.getBaseNodePath(), "FINISHED".getBytes("UTF-8"));
+			zkSession.updateNode(config.getBaseNodePath(), "FINISHED".getBytes("UTF-8"));
 		} catch (NullPointerException | UnsupportedEncodingException | KeeperException | InterruptedException e) {
 			log.warn("Exception while attempting to notify ECS", e);
 		}
 	}
 
     private void readMigrationNode() {
-        List<String> childNodes = zkWrapper.getChildNodes(config.getMigrationNodePath(), new Watcher() {
+        List<String> childNodes = zkSession.getChildNodes(config.getMigrationNodePath(), new Watcher() {
             @Override
             public void process(WatchedEvent watchedEvent) {
                 if (watchedEvent.getType() == EventType.NodeChildrenChanged) {
@@ -318,12 +318,12 @@ public class KVServer implements IKVServer, Runnable {
         }
 
         // Receive migrated data from other servers
-        MigrationManager.receiveData(childNodes, zkWrapper, this);
+        MigrationManager.receiveData(childNodes, zkSession, this);
     }
 
 	private void syncServerStatus() {
 		try {
-			String kvStatus = zkWrapper.getNodeData(ZKWrapper.KV_SERVICE_STATUS_NODE, new Watcher() {
+			String kvStatus = zkSession.getNodeData(ZKSession.KV_SERVICE_STATUS_NODE, new Watcher() {
 
 				@Override
 				public void process(WatchedEvent event) {
@@ -338,10 +338,10 @@ public class KVServer implements IKVServer, Runnable {
 				}
 			});
 			
-			if (kvStatus.equals(ZKWrapper.RUNNING_STATUS)) {
+			if (kvStatus.equals(ZKSession.RUNNING_STATUS)) {
 				this.status = ServerStatus.RUNNING;
 			}
-			else if (kvStatus.equals(ZKWrapper.STOPPED_STATUS)) {
+			else if (kvStatus.equals(ZKSession.STOPPED_STATUS)) {
 				this.status = ServerStatus.STOPPED;
 			}
 			
@@ -493,7 +493,7 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public boolean moveData(String[] hashRange, String targetName) {
-	    return MigrationManager.sendData(hashRange, targetName, zkWrapper, this);
+	    return MigrationManager.sendData(hashRange, targetName, zkSession, this);
 	}
 
 	public NavigableMap<String, IECSNode> getCachedMetadata() {

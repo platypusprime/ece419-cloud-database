@@ -30,7 +30,7 @@ import ecs.IECSNodeSerializer;
 /**
  * Provides a wrapper around the public ZooKeeper API.
  */
-public class ZKWrapper {
+public class ZKSession {
 
 	/** The ZNode that serves as a parent to all system-global nodes. */
 	public static final String KV_SERVICE_ROOT_NODE = "/ecs";
@@ -68,7 +68,7 @@ public class ZKWrapper {
 	/** The type for IECSNode lists. Used for deserialization. */
 	public static final Type IECS_NODE_LIST_TYPE = new TypeToken<List<IECSNode>>() {}.getType();
 
-	private static final Logger log = Logger.getLogger(ZKWrapper.class);
+	private static final Logger log = Logger.getLogger(ZKSession.class);
 
 	// TODO tune as necessary
 	private static final int ZK_INIT_TIMEOUT = 2;
@@ -89,7 +89,7 @@ public class ZKWrapper {
 	 * @param zkHostname The hostname used by the ZooKeeper service
 	 * @param zkPort The port number used by the ZooKeeper service
 	 */
-	public ZKWrapper(String zkHostname, int zkPort) {
+	public ZKSession(String zkHostname, int zkPort) {
 		this.zkHostname = zkHostname;
 		this.zkPort = zkPort;
 

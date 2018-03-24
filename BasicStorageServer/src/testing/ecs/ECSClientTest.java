@@ -5,8 +5,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 
-import static common.zookeeper.ZKWrapper.KV_SERVICE_STATUS_NODE;
-import static common.zookeeper.ZKWrapper.RUNNING_STATUS;
+import static common.zookeeper.ZKSession.KV_SERVICE_STATUS_NODE;
+import static common.zookeeper.ZKSession.RUNNING_STATUS;
 
 import java.util.Collection;
 import java.util.Arrays;
@@ -22,7 +22,7 @@ import app_kvECS.ECSClient;
 import ecs.ECSNode;
 import ecs.IECSNode;
 import common.HashUtil;
-import common.zookeeper.ZKWrapper;
+import common.zookeeper.ZKSession;
 
 
 /**
@@ -32,12 +32,12 @@ import common.zookeeper.ZKWrapper;
 public class ECSClientTest {
 
     private ECSClient ecsClient;
-    private ZKWrapper zkWrapper;
+    private ZKSession zkSession;
 
     @Before
     public void setUp() {
         this.ecsClient = new ECSClient("127.0.0.1", 2181);
-        this.zkWrapper = new ZKWrapper("127.0.0.1", 2181);
+        this.zkSession = new ZKSession("127.0.0.1", 2181);
     }
 
     @After
@@ -90,7 +90,7 @@ public class ECSClientTest {
     public void testECSClientstart() {
         ecsClient.start();
         try {
-            String data = zkWrapper.getNodeData(KV_SERVICE_STATUS_NODE);
+            String data = zkSession.getNodeData(KV_SERVICE_STATUS_NODE);
             assertEquals(data, RUNNING_STATUS);
         } catch (KeeperException | InterruptedException e) {
         }

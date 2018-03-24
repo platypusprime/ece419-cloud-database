@@ -1,7 +1,7 @@
 package app_kvServer.migration;
 
 import app_kvServer.KVServer;
-import common.zookeeper.ZKWrapper;
+import common.zookeeper.ZKSession;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
@@ -12,34 +12,34 @@ import java.util.Map;
 public class MigrationReceiveTask {
 
     private final String znodePath;
-    private final ZKWrapper zkWrapper;
+    private final ZKSession zkSession;
     private final KVServer kvServer;
 
     private static final Logger log = Logger.getLogger(MigrationReceiveTask.class);
 
-    public MigrationReceiveTask(String znodePath, ZKWrapper zkWrapper, KVServer kvServer) {
+    public MigrationReceiveTask(String znodePath, ZKSession zkSession, KVServer kvServer) {
         this.znodePath = znodePath;
-        this.zkWrapper = zkWrapper;
+        this.zkSession = zkSession;
         this.kvServer = kvServer;
     }
 
     public synchronized void receiveData() {
         try {
-            String data = zkWrapper.getNodeData(znodePath, new Watcher() {
+            String data = zkSession.getNodeData(znodePath, new Watcher() {
                 @Override
                 public void process(WatchedEvent watchedEvent) {
                     if (watchedEvent.getType() == Event.EventType.NodeDataChanged) {
                         receiveData();
                     }
                     else if (watchedEvent.getType() == Event.EventType.NodeDeleted) {
-                        zkWrapper.updateNode(kvServer.getCurrentConfig().getBaseNodePath(), "FINISHED");
+                        zkSession.updateNode(kvServer.getCurrentConfig().getBaseNodePath(), "FINISHED");
                     }
                 }
             });
 
             if (data != null && !data.isEmpty()) {
                 // Write empty data on znode to indicate acknowledgement
-                zkWrapper.updateNode(znodePath, new byte[0]);
+                zkSession.updateNode(znodePath, new byte[0]);
 
                 // Save to data to persistence
                 processAndSaveData(data);

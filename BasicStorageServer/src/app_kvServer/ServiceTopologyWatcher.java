@@ -12,7 +12,7 @@ import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 
-import common.zookeeper.ZKWrapper;
+import common.zookeeper.ZKSession;
 import ecs.IECSNode;
 
 /**
@@ -23,7 +23,7 @@ public class ServiceTopologyWatcher implements Watcher {
 	private static final Logger log = Logger.getLogger(ServiceTopologyWatcher.class);
 
 	private final KVServer server;
-	private final ZKWrapper zkSession;
+	private final ZKSession zkSession;
 	private boolean cancelled = false;
 
 	/**
@@ -33,7 +33,7 @@ public class ServiceTopologyWatcher implements Watcher {
 	 * @param zkSession The wrapper for the ZooKeeper client session associated with
 	 *            the specified server
 	 */
-	public ServiceTopologyWatcher(KVServer server, ZKWrapper zkSession) {
+	public ServiceTopologyWatcher(KVServer server, ZKSession zkSession) {
 		this.server = server;
 		this.zkSession = zkSession;
 	}
@@ -81,7 +81,7 @@ public class ServiceTopologyWatcher implements Watcher {
 		// All servers have been removed, nowhere to move data to. Thus, shutdown
 		if (updatedMetadata.isEmpty()) {
 			// Notify ECS that server is ready for shutdown
-			zkSession.updateNode(self.getBaseNodePath(), ZKWrapper.READY_FOR_SHUTDOWN);
+			zkSession.updateNode(self.getBaseNodePath(), ZKSession.READY_FOR_SHUTDOWN);
 		}
 
 		// Check whether self is included among removed nodes
