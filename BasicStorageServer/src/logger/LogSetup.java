@@ -51,11 +51,13 @@ public class LogSetup {
 
 		PatternLayout consoleLayout = new PatternLayout(consolePattern);
 		ConsoleAppender consoleAppender = new ConsoleAppender(consoleLayout);
+		consoleAppender.setThreshold(Level.INFO);
 		consoleAppender.setName("stdout");
 
 		Logger rootLogger = Logger.getRootLogger();
-		rootLogger.removeAllAppenders();
+		rootLogger.removeAppender("stdout");
 		rootLogger.addAppender(consoleAppender);
+		rootLogger.removeAppender("file");
 		rootLogger.addAppender(fileAppender);
 		rootLogger.setLevel(level);
 	}

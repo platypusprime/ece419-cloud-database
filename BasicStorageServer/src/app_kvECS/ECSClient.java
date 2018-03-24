@@ -95,7 +95,7 @@ public class ECSClient implements IECSClient {
 			this.zkWrapper.createMetadataNode(nodes);
 
 		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
-			log.error("Could not create ECS nodes", e);
+			log.error("Exception while creating global ZNodes", e);
 		}
 
 	}
@@ -427,7 +427,6 @@ public class ECSClient implements IECSClient {
 	private void runAdminConsole() {
 		try (BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in))) {
 			log.info("Welcome to kvECS application");
-			log.info("Usage Procedure: addnodes -> start -> addnode/remove");
 			boolean stop = false;
 			while (!stop) {
 				System.out.print(PROMPT);
@@ -514,18 +513,26 @@ public class ECSClient implements IECSClient {
 		log.info("::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::");
 		log.info("KV ECS HELP (Usage):");
 		log.info("::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::");
+		log.info("");
+		log.info("Procedure: add -> start -> add/remove/stop/shutdown");
+		log.info("");
 		log.info("add <count>(optional) <cacheStrategy> <cacheSize>");
-		log.info("\tStarts up <count> servers (or 1, if <count> is not specified)");
+		log.info("\t\tStarts up <count> servers (or 1, if <count> is not specified)");
+		log.info("");
 		log.info("remove <serverName1> <serverName2> ...");
-		log.info("\tRemoves nodes with given names");
+		log.info("\t\tRemoves nodes with given names");
+		log.info("");
 		log.info("start");
-		log.info("\tStarts all storage servers, opening them for client requests");
+		log.info("\t\tStarts all storage servers, opening them for client requests");
+		log.info("");
 		log.info("stop");
-		log.info("\tStops all storage servers, but does not end their processes");
+		log.info("\t\tStops all storage servers, but does not end their processes");
+		log.info("");
 		log.info("shutdown");
-		log.info("\tShuts down the storage service, ending all processes and quitting the application");
+		log.info("\t\tShuts down the storage service, ending all processes and quitting the application");
+		log.info("");
 		log.info("help");
-		log.info("\tShows this message");
+		log.info("\t\tShows this message");
 		log.info("");
 	}
 

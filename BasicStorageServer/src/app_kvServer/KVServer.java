@@ -18,19 +18,18 @@ import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.TreeMap;
 
-import app_kvServer.migration.MigrationManager;
-import org.apache.zookeeper.Watcher.Event.EventType;
-
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.Watcher.Event.EventType;
 
 import app_kvServer.cache.FifoCache;
 import app_kvServer.cache.KVCache;
 import app_kvServer.cache.LfuCache;
 import app_kvServer.cache.LruCache;
+import app_kvServer.migration.MigrationManager;
 import app_kvServer.persistence.FilePersistence;
 import app_kvServer.persistence.KVPersistence;
 import common.zookeeper.ZKWrapper;
@@ -245,7 +244,7 @@ public class KVServer implements IKVServer, Runnable {
 		// main accept loop
 		while (!serverSocket.isClosed()) {
 			try {
-				log.info("Listening for client connections...");
+				log.debug("Listening for client connections...");
 				Socket clientSocket = serverSocket.accept();
 				ClientConnection connection = new ClientConnection(clientSocket, this);
 				clients.add(connection);
@@ -256,7 +255,7 @@ public class KVServer implements IKVServer, Runnable {
 						+ " on port " + clientSocket.getPort());
 
 			} catch (SocketTimeoutException e) {
-				// do nothing
+				log.debug("Accept timed out");
 			} catch (IOException e) {
 				log.error("Error! " + "Unable to establish connection", e);
 			}
