@@ -63,6 +63,8 @@ public class ECSClient implements IECSClient {
 	/** The ECS's internal representation of the service topology. */
 	private KVServiceTopology topology = new KVServiceTopology();
 
+	/** heartbeatWatcher thread */
+	private Thread heartbeatWatcher;
 	/**
 	 * Initializes an ECS service and connects it to the specified
 	 * ZooKeeper service using the default wrapper.
@@ -71,7 +73,8 @@ public class ECSClient implements IECSClient {
 	 * @param zkPort The port number used by the ZooKeeper service
 	 */
 	public ECSClient(String zkHostname, int zkPort) {
-		this(ECS_CONFIG_FILENAME, new ZKSession(zkHostname, zkPort), new SshServerInitializer(zkHostname, zkPort));
+//		this(ECS_CONFIG_FILENAME, new ZKSession(zkHostname, zkPort), new SshServerInitializer(zkHostname, zkPort));
+		this(ECS_CONFIG_FILENAME, new ZKSession(zkHostname, zkPort), new LocalServerInitializer(zkHostname, zkPort));
 	}
 
 	/**
@@ -92,6 +95,7 @@ public class ECSClient implements IECSClient {
 			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_MD_NODE);
 			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
 			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_LOGGING_NODE, Level.ERROR.toString().getBytes(UTF_8));
+			this.heartbeatWatcher = new Thread(new ServerWatcher(this.zkSession, this));
 
 		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
 			log.error("Exception while creating global znodes", e);
@@ -103,6 +107,7 @@ public class ECSClient implements IECSClient {
 	public boolean start() {
 		log.info("Starting all servers in the KV store service");
 		try {
+			heartbeatWatcher.start();
 			zkSession.updateNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, RUNNING_STATUS.getBytes(UTF_8));
 			return true;
 		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
@@ -131,6 +136,7 @@ public class ECSClient implements IECSClient {
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_MD_NODE);
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_STATUS_NODE);
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_LOGGING_NODE);
+			heartbeatWatcher.stop();
 			zkSession.close();
 			return true;
 

@@ -5,8 +5,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Set;
+import java.util.Map;
+import java.util.Arrays;
 import java.lang.Thread;
-
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.KeeperException;
@@ -25,18 +27,19 @@ public class ServerWatcher implements Runnable {
     public static final String CONSOLE_PATTERN = PROMPT + "%m%n";
 
     private ZKSession zkSession;
-    private Collection<IECSNode> runningNodes;
-    private KVServiceTopology topology;
+    private Map<String, IECSNode> runningNodes;
+    private ECSClient ecsClient;
+    private boolean stop = false;
 
-    public void ServerWatcher(String zkHostname, int zkPort, Collection<IECSNode> nodes, KVServiceTopology topology) {
-        this.zkSession = new ZKSession(zkHostname, zkPort);
-        this.runningNodes = nodes;
-        this.topology = topology;
+    public ServerWatcher(ZKSession zkSession, ECSClient ecsClient) {
+        this.zkSession = zkSession;
+        this.ecsClient = ecsClient;
     }
+
     public void run() {
-        // initialize logging
+
         try {
-            LogSetup.initialize("logs/ecs.log", Level.INFO, CONSOLE_PATTERN);
+            LogSetup.initialize("logs/serverwatcher.log", Level.INFO, CONSOLE_PATTERN);
         } catch (IOException e) {
             System.out.println("ERROR: unable to initialize logger");
             e.printStackTrace();
@@ -48,8 +51,10 @@ public class ServerWatcher implements Runnable {
 
         while(true)
         {
-            List<String> failedNodes = new ArrayList<>();
-            for(IECSNode node : runningNodes){
+            List<IECSNode> failedNodes = new ArrayList<>();
+            runningNodes = new ConcurrentHashMap(ecsClient.getNodes());
+            for(Map.Entry<String, IECSNode> entry : runningNodes.entrySet()){
+                IECSNode node = entry.getValue();
                 try {
                     lastData = zkSession.getNodeData(ZKPathUtil.getHeartbeatZnode(node));
                     Thread.sleep(2000);
@@ -58,7 +63,8 @@ public class ServerWatcher implements Runnable {
                     log.warn("Exception while reading server-ECS node", e);
                 }
                 if(lastData.equals(data)){
-                    failedNodes.add(node.getNodeName());
+                    log.info("Server: " + node.getNodeName() + " down");
+                    failedNodes.add(node);
                 }
             }
             if(failedNodes.size() > 0) {
@@ -67,31 +73,13 @@ public class ServerWatcher implements Runnable {
         }
     }
 
-    public void handleServerFailures(Collection<String> nodeNames){
-        // update the topology object
-        Set<IECSNode> removedNodes = topology.removeNodesByName(nodeNames);
-        Set<IECSNode> successorNodes = topology.findSuccessors(removedNodes);
-
-        try {
-            zkSession.updateMetadataNode(topology);
-        } catch (KeeperException | InterruptedException e) {
-            log.error("Could not update metadata znode data", e);
+    public void handleServerFailures(Collection<IECSNode> nodes){
+        // TODO: add failure detection
+        for(IECSNode node:nodes){
+            ecsClient.removeNodes(Arrays.asList(node.getNodeName()));
+            ecsClient.addNode(node.getCacheStrategy(), node.getCacheSize());
         }
-
-        // signal shutdown to removed nodes
-        for (IECSNode removedNode : removedNodes) {
-            try {
-                zkSession.deleteNode(ZKPathUtil.getStatusZnode(removedNode));
-                zkSession.deleteNode(ZKPathUtil.getMigrationRootZnode(removedNode));
-                zkSession.deleteNode(ZKPathUtil.getReplicationRootZnode(removedNode));
-                zkSession.deleteNode(ZKPathUtil.getHeartbeatZnode(removedNode));
-            } catch (KeeperException | InterruptedException e) {
-                log.error("Could not delete znode for node " + removedNode, e);
-            }
-        }
-
-        // TODO: Addnode after remove
-
     }
+
 
 }

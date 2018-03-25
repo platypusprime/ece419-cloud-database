@@ -33,7 +33,7 @@ import app_kvServer.migration.MigrationMessage;
 import app_kvServer.migration.MigrationReceiveTask;
 import app_kvServer.persistence.FilePersistence;
 import app_kvServer.persistence.KVPersistence;
-import app_kvServer.persistence.KVPersistenceIterator;
+import app_kvServer.persistence.KVPersistenceChunkator;
 import common.HashUtil;
 import common.KVServiceTopology;
 import common.zookeeper.ZKPathUtil;
@@ -76,7 +76,7 @@ public class KVServer implements IKVServer, Runnable {
 	private IECSNode config = null;
 	private KVServiceTopology serviceConfig;
 	private ServiceStatusWatcher serviceStatusWatcher = null;
-
+	private Thread heartbeatThread;
 	/**
 	 * Main entry point for the key-value server application.
 	 * 
@@ -163,6 +163,24 @@ public class KVServer implements IKVServer, Runnable {
 					+ "port=" + port + ", "
 					+ "cacheSize=" + cacheSize + ", "
 					+ "strategy=" + cacheStrategy);
+
+			this.heartbeatThread = new Thread()
+			{
+				public void run(){
+					int heartbeatCounter = 0;
+					while (true) {
+						try{
+							// 50 here is arbitrary
+							heartbeatCounter = (heartbeatCounter + 1) % 50;
+							zkSession.updateNode(ZKPathUtil.getHeartbeatZnode(config), Integer.toString(heartbeatCounter).getBytes());
+							Thread.sleep(1000);
+						} catch (KeeperException | InterruptedException e) {
+							log.warn("Exception while reading server-ECS node", e);
+						}
+					}
+				}
+			};
+			heartbeatThread.start();
 
 			// begin execution on new thread
 			new Thread(this).start();
@@ -286,7 +304,7 @@ public class KVServer implements IKVServer, Runnable {
 				log.error("Unable to close client connection", e);
 			}
 		}
-
+		heartbeatThread.stop();
 		log.info("Server stopped.");
 	}
 
@@ -519,7 +537,7 @@ public class KVServer implements IKVServer, Runnable {
 			return false;
 		}
 
-		try (KVPersistenceIterator it = persistence.iterator()) {
+		try (KVPersistenceChunkator it = persistence.chunkator()) {
 
 			while (it.hasNextChunk()) {
 				Map<String, String> kvPairs = it
