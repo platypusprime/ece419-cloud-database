@@ -47,6 +47,8 @@ import logger.LogSetup;
  */
 public class KVServer implements IKVServer, Runnable {
 
+	private static final String PERSISTENCE_FILENAME_FORMAT = "persistence/%s-data.txt";
+
 	private static final Logger log = Logger.getLogger(KVServer.class);
 
 	private final int port;
@@ -156,8 +158,8 @@ public class KVServer implements IKVServer, Runnable {
 			this.cache = chooseCache(cacheStrategy, cacheSize);
 
 			// set up storage
-			String storageIdentifier = this.name + "-data.csv";
-			this.persistence = new FilePersistence(storageIdentifier);
+			String persistenceFilename = String.format(PERSISTENCE_FILENAME_FORMAT, this.name);
+			this.persistence = new FilePersistence(persistenceFilename);
 
 			log.info("Created KVServer with "
 					+ "port=" + port + ", "

@@ -8,6 +8,8 @@
 *.log
 **/logs
 *.csv
+**/persistence
+*enron*
 
 # IDE/project artifacts
 .idea

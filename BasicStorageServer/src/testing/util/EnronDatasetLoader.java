@@ -37,9 +37,10 @@ public class EnronDatasetLoader {
 	 */
 	public static void main(String[] args) {
 		Path dir = Paths.get(args[0]);
-		Map<String, String> data = streamEmails(dir, Integer.parseInt(args[1]));
+		int num = Integer.parseInt(args[1]);
+		Map<String, String> data = streamEmails(dir, num);
 
-		FilePersistence persistence = new FilePersistence("enron.txt");
+		FilePersistence persistence = new FilePersistence("enron-" + num + ".txt");
 		persistence.clear();
 		persistence.insertAll(data);
 	}
