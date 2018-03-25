@@ -306,7 +306,7 @@ public class KVServer implements IKVServer, Runnable {
 				log.error("Unable to close client connection", e);
 			}
 		}
-		heartbeatThread.stop();
+		heartbeatThread.interrupt();
 		log.info("Server stopped.");
 	}
 

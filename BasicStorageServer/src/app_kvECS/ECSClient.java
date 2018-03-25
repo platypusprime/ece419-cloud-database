@@ -135,7 +135,7 @@ public class ECSClient implements IECSClient {
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_MD_NODE);
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_STATUS_NODE);
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_LOGGING_NODE);
-			heartbeatWatcher.stop();
+			heartbeatWatcher.interrupt();
 			zkSession.close();
 			return true;
 
