@@ -1,85 +1,95 @@
 package app_kvECS;
 
-import java.io.IOException;
-import java.util.Collection;
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Set;
-import java.util.Map;
 import java.util.Arrays;
-import java.lang.Thread;
-import java.util.concurrent.ConcurrentHashMap;
-import org.apache.log4j.Level;
+import java.util.Objects;
+
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.KeeperException;
 
 import common.zookeeper.ZKPathUtil;
 import common.zookeeper.ZKSession;
-import common.KVServiceTopology;
-import ecs.ECSNode;
 import ecs.IECSNode;
 
-import logger.LogSetup;
-
+/**
+ * Tracks the liveness of a single server using heartbeats transmitted with
+ * ZooKeeper znodes.
+ */
 public class ServerWatcher implements Runnable {
-    private static final Logger log = Logger.getLogger(ServerWatcher.class);
-    public static final String PROMPT = "serverWatcher> ";
-    public static final String CONSOLE_PATTERN = PROMPT + "%m%n";
 
-    private ZKSession zkSession;
-    private Map<String, IECSNode> runningNodes;
-    private ECSClient ecsClient;
-    private boolean stop = false;
+	private static final Logger log = Logger.getLogger(ServerWatcher.class);
 
-    public ServerWatcher(ZKSession zkSession, ECSClient ecsClient) {
-        this.zkSession = zkSession;
-        this.ecsClient = ecsClient;
-    }
+	private static final int HEARTBEAT_CHECK_INTERVAL = 5000;
 
-    public void run() {
+	private final ECSClient ecsClient;
+	private final ZKSession zkSession;
+	private final IECSNode server;
 
-        try {
-            LogSetup.initialize("logs/serverwatcher.log", Level.INFO, CONSOLE_PATTERN);
-        } catch (IOException e) {
-            System.out.println("ERROR: unable to initialize logger");
-            e.printStackTrace();
-            System.exit(1);
-        }
+	/**
+	 * Creates a heartbeat listener for the given server.
+	 * 
+	 * @param server The server to listen for heartbeats for
+	 * @param ecsClient The ECS client managing the given server
+	 * @param zkSession The ZooKeeper session to use to check the heartbeat znode
+	 */
+	public ServerWatcher(IECSNode server, ECSClient ecsClient, ZKSession zkSession) {
+		this.server = server;
+		this.ecsClient = ecsClient;
+		this.zkSession = zkSession;
+	}
 
-        String lastData = null;
-        String data = null;
+	@Override
+	public void run() {
+		String lastData, data;
+		try {
+			lastData = zkSession.getNodeData(ZKPathUtil.getHeartbeatZnode(server));
+		} catch (KeeperException | InterruptedException e) {
+			log.error("Exception while reading heartbeat node " + ZKPathUtil.getHeartbeatZnode(server), e);
+			return;
+		}
 
-        while(true)
-        {
-            List<IECSNode> failedNodes = new ArrayList<>();
-            runningNodes = new ConcurrentHashMap(ecsClient.getNodes());
-            for(Map.Entry<String, IECSNode> entry : runningNodes.entrySet()){
-                IECSNode node = entry.getValue();
-                try {
-                    lastData = zkSession.getNodeData(ZKPathUtil.getHeartbeatZnode(node));
-                    Thread.sleep(2000);
-                    data = zkSession.getNodeData(ZKPathUtil.getHeartbeatZnode(node));
-                } catch (KeeperException | InterruptedException e) {
-                    log.warn("Exception while reading server-ECS node", e);
-                }
-                if(lastData.equals(data)){
-                    log.info("Server: " + node.getNodeName() + " down");
-                    failedNodes.add(node);
-                }
-            }
-            if(failedNodes.size() > 0) {
-                handleServerFailures(failedNodes);
-            }
-        }
-    }
+		while (!Thread.interrupted()) {
+			try {
+				Thread.sleep(HEARTBEAT_CHECK_INTERVAL);
 
-    public void handleServerFailures(Collection<IECSNode> nodes){
-        // TODO: add failure detection
-        for(IECSNode node:nodes){
-            ecsClient.removeNodes(Arrays.asList(node.getNodeName()));
-            ecsClient.addNode(node.getCacheStrategy(), node.getCacheSize());
-        }
-    }
+				data = zkSession.getNodeData(ZKPathUtil.getHeartbeatZnode(server));
 
+				if (!Objects.equals(data, lastData)) {
+					lastData = data;
+
+				} else {
+					log.info("Did not receive heartbeat from " + server.getNodeName()
+							+ " in " + HEARTBEAT_CHECK_INTERVAL + " ms");
+					handleFailure();
+					break;
+				}
+
+			} catch (KeeperException e) {
+				log.warn("Exception while listening for heartbeat", e);
+			} catch (InterruptedException e) {
+				log.info("Heartbeat listening thread interrupted; ending");
+				break;
+			}
+		}
+	}
+
+	private void handleFailure() {
+		// remove znodes associated with the failed node
+		try {
+			zkSession.deleteNode(ZKPathUtil.getStatusZnode(server));
+			zkSession.deleteNode(ZKPathUtil.getMigrationRootZnode(server));
+			zkSession.deleteNode(ZKPathUtil.getReplicationRootZnode(server));
+			zkSession.deleteNode(ZKPathUtil.getHeartbeatZnode(server));
+		} catch (KeeperException | InterruptedException e) {
+			log.error("Could not delete znodes for server: " + server.getNodeName(), e);
+		}
+
+		// Since migration znode is missing, successor will know not to try and
+		// communicate with the crashed node for migration.
+		ecsClient.removeNodes(Arrays.asList(server.getNodeName()));
+
+		// Replace the crashed node with a new one. Usually, this will be the same one
+		// that crashed. This will start a new heartbeat listener.
+		ecsClient.addNode(server.getCacheStrategy(), server.getCacheSize());
+	}
 
 }

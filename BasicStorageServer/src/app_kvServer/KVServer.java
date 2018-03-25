@@ -46,9 +46,11 @@ import logger.LogSetup;
  */
 public class KVServer implements IKVServer, Runnable {
 
-	private static final String PERSISTENCE_FILENAME_FORMAT = "persistence/%s-data.txt";
-
 	private static final Logger log = Logger.getLogger(KVServer.class);
+
+	private static final String PERSISTENCE_FILENAME_FORMAT = "persistence/%s-data.txt";
+	
+	private static final int HEARTBEAT_INTERVAL = 1000;
 
 	private final int port;
 	private final KVCache cache;
@@ -341,7 +343,7 @@ public class KVServer implements IKVServer, Runnable {
 						heartbeatCounter = (heartbeatCounter + 1) % 50;
 						zkSession.updateNode(ZKPathUtil.getHeartbeatZnode(config),
 								Integer.toString(heartbeatCounter));
-						Thread.sleep(1000);
+						Thread.sleep(HEARTBEAT_INTERVAL);
 					} catch (KeeperException | InterruptedException e) {
 						log.warn("Exception while updating heartbeat", e);
 					}

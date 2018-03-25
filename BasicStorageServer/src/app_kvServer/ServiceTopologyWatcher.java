@@ -193,6 +193,8 @@ public class ServiceTopologyWatcher implements Watcher {
 
 		server.lockWrite();
 
+		// TODO handle case where node is deleted due to failure
+
 		List<Thread> transferThreads = new ArrayList<>();
 		for (IECSNode transferrer : transferrers) {
 			String transferNode = ZKPathUtil.getMigrationZnode(config, transferrer);

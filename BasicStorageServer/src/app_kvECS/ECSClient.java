@@ -12,9 +12,11 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -62,8 +64,9 @@ public class ECSClient implements IECSClient {
 	/** The ECS's internal representation of the service topology. */
 	private KVServiceTopology topology = new KVServiceTopology();
 
-	/** heartbeatWatcher thread */
-	private Thread heartbeatWatcher;
+	/** Heartbeat listening threads map. */
+	private final Map<String, Thread> heartbeatThreads;
+
 	/**
 	 * Initializes an ECS service and connects it to the specified
 	 * ZooKeeper service using the default wrapper.
@@ -88,12 +91,12 @@ public class ECSClient implements IECSClient {
 		this.zkSession = zkSession;
 		this.serverInitializer = serverInitializer;
 		this.configFilename = configFilename;
+		this.heartbeatThreads = new HashMap<>();
 
 		try {
 			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_MD_NODE);
 			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
 			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_LOGGING_NODE, Level.ERROR.toString().getBytes(UTF_8));
-			this.heartbeatWatcher = new Thread(new ServerWatcher(this.zkSession, this));
 
 		} catch (KeeperException | InterruptedException e) {
 			log.error("Exception while creating global znodes", e);
@@ -105,7 +108,6 @@ public class ECSClient implements IECSClient {
 	public boolean start() {
 		log.info("Starting all servers in the KV store service");
 		try {
-			heartbeatWatcher.start();
 			zkSession.updateNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, RUNNING_STATUS.getBytes(UTF_8));
 			return true;
 		} catch (KeeperException | InterruptedException e) {
@@ -134,7 +136,9 @@ public class ECSClient implements IECSClient {
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_MD_NODE);
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_STATUS_NODE);
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_LOGGING_NODE);
-			heartbeatWatcher.interrupt();
+
+			heartbeatThreads.values().forEach(Thread::interrupt);
+
 			zkSession.close();
 			return true;
 
@@ -145,7 +149,7 @@ public class ECSClient implements IECSClient {
 	}
 
 	@Override
-	public IECSNode addNode(String cacheStrategy, int cacheSize) {
+	public synchronized IECSNode addNode(String cacheStrategy, int cacheSize) {
 		Collection<IECSNode> nodes = addNodes(1, cacheStrategy, cacheSize);
 		if (nodes != null && nodes.size() == 1) {
 			return nodes.iterator().next();
@@ -155,7 +159,7 @@ public class ECSClient implements IECSClient {
 	}
 
 	@Override
-	public Collection<IECSNode> addNodes(int count, String cacheStrategy, int cacheSize) {
+	public synchronized Collection<IECSNode> addNodes(int count, String cacheStrategy, int cacheSize) {
 		Collection<IECSNode> newNodes = setupNodes(count, cacheStrategy, cacheSize);
 		if (newNodes == null) return null;
 
@@ -178,7 +182,7 @@ public class ECSClient implements IECSClient {
 				log.warn("Could not initialize server: " + node, e);
 			}
 		}
-		
+
 		if (successorNodes.isEmpty()) {
 			for (IECSNode newNode : newNodes) {
 				try {
@@ -199,6 +203,12 @@ public class ECSClient implements IECSClient {
 		}
 		if (!gotStartupResponse) {
 			log.warn("Did not receive enough responses within " + NODE_STARTUP_TIMEOUT + " ms");
+		}
+
+		for (IECSNode newNode : newNodes) {
+			Thread t = new Thread(new ServerWatcher(newNode, this, zkSession));
+			heartbeatThreads.put(newNode.getNodeName(), t);
+			t.start();
 		}
 
 		// await server responses for migration
@@ -230,7 +240,7 @@ public class ECSClient implements IECSClient {
 	 *      419 Milestone 2 - External Configuration Service (ECS)</a>
 	 */
 	@Override
-	public Collection<IECSNode> setupNodes(int count, String cacheStrategy, int cacheSize) {
+	public synchronized Collection<IECSNode> setupNodes(int count, String cacheStrategy, int cacheSize) {
 		List<IECSNode> availableNodes = new ArrayList<>();
 
 		log.info("Loading " + count + " node(s) with cache strategy \"" + cacheStrategy + "\" and cache size "
@@ -305,7 +315,7 @@ public class ECSClient implements IECSClient {
 	}
 
 	@Override
-	public boolean removeNodes(Collection<String> nodeNames) {
+	public synchronized boolean removeNodes(Collection<String> nodeNames) {
 		// update the topology object
 		Set<IECSNode> removedNodes = topology.removeNodesByName(nodeNames);
 		Set<IECSNode> successorNodes = topology.findSuccessors(removedNodes);
@@ -345,8 +355,12 @@ public class ECSClient implements IECSClient {
 			}
 		}
 
-		return true;
+		// remove heartbeat listeners for the removed nodes
+		for (String nodeName : nodeNames) {
+			Optional.ofNullable(heartbeatThreads.remove(nodeName)).ifPresent(Thread::interrupt);
+		}
 
+		return true;
 	}
 
 	@Override
