@@ -3,6 +3,7 @@
  */
 package testing.common.messages;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
@@ -46,7 +47,7 @@ public class StreamUtilTest {
 			util.sendMessage(out, msg);
 			sentBytes = out.toByteArray();
 		}
-		String sentStr = new String(sentBytes, "UTF-8");
+		String sentStr = new String(sentBytes, UTF_8);
 		assertEquals("{\"key\":\"foo\",\"status\":\"PUT\"}\n", sentStr);
 
 	}
@@ -59,7 +60,7 @@ public class StreamUtilTest {
 	@Test
 	public void testReceivePut() throws IOException {
 		String msg = "{\"key\":\"foo\",\"status\":\"PUT\"}\n";
-		ByteArrayInputStream in = new ByteArrayInputStream(msg.getBytes("UTF-8"));
+		ByteArrayInputStream in = new ByteArrayInputStream(msg.getBytes(UTF_8));
 		String inMsgStr = util.receiveString(in);
 		KVMessage rcvMsg = util.deserializeKVMessage(inMsgStr);
 		assertEquals(StatusType.PUT, rcvMsg.getStatus());

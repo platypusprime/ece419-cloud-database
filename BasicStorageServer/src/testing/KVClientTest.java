@@ -1,5 +1,6 @@
 package testing;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -62,7 +63,7 @@ public class KVClientTest extends LogInstrumentingTest {
 	@Test
 	@Ignore("includes side-effects for logger setup")
 	public void testInterface() throws UnsupportedEncodingException {
-		ByteArrayInputStream s = new ByteArrayInputStream("quit".getBytes("UTF-8"));
+		ByteArrayInputStream s = new ByteArrayInputStream("quit".getBytes(UTF_8));
 		System.setIn(s);
 		KVClient.main(null);
 	}

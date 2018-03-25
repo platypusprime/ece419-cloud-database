@@ -4,13 +4,12 @@ import static app_kvECS.ECSAdminConsole.CONSOLE_PATTERN;
 import static common.zookeeper.ZKSession.FINISHED;
 import static common.zookeeper.ZKSession.RUNNING_STATUS;
 import static common.zookeeper.ZKSession.STOPPED_STATUS;
-import static common.zookeeper.ZKSession.UTF_8;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -96,7 +95,7 @@ public class ECSClient implements IECSClient {
 			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_LOGGING_NODE, Level.ERROR.toString().getBytes(UTF_8));
 			this.heartbeatWatcher = new Thread(new ServerWatcher(this.zkSession, this));
 
-		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
+		} catch (KeeperException | InterruptedException e) {
 			log.error("Exception while creating global znodes", e);
 		}
 
@@ -109,7 +108,7 @@ public class ECSClient implements IECSClient {
 			heartbeatWatcher.start();
 			zkSession.updateNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, RUNNING_STATUS.getBytes(UTF_8));
 			return true;
-		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
+		} catch (KeeperException | InterruptedException e) {
 			log.error("Could not update status node", e);
 		}
 		return false;
@@ -121,7 +120,7 @@ public class ECSClient implements IECSClient {
 		try {
 			zkSession.updateNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
 			return true;
-		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
+		} catch (KeeperException | InterruptedException e) {
 			log.error("Could not update status node", e);
 		}
 		return false;

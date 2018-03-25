@@ -1,5 +1,7 @@
 package testing.util;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -88,7 +90,7 @@ public class EnronDatasetLoader {
 	 * @return A key-value pair loaded from the email
 	 */
 	public static Map.Entry<String, String> parseEmail(Path emailFilePath) {
-		try (Scanner scanner = new Scanner(new FileInputStream(emailFilePath.toFile()))) {
+		try (Scanner scanner = new Scanner(new FileInputStream(emailFilePath.toFile()), UTF_8.name())) {
 			String messageId1 = scanner.findInLine(MESSAGE_ID_PATTERN);
 			String messageId2 = scanner.findInLine(MESSAGE_ID_PATTERN);
 			if (messageId1 == null || messageId2 == null) return null;

@@ -1,6 +1,6 @@
 package app_kvServer.migration;
 
-import static common.zookeeper.ZKSession.UTF_8;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.IOException;
 import java.io.InputStream;

@@ -2,11 +2,10 @@ package app_kvServer;
 
 import static common.zookeeper.ZKPathUtil.KV_SERVICE_STATUS_NODE;
 import static common.zookeeper.ZKSession.FINISHED;
-import static common.zookeeper.ZKSession.UTF_8;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.net.BindException;
 import java.net.InetAddress;
 import java.net.ServerSocket;
@@ -341,7 +340,7 @@ public class KVServer implements IKVServer, Runnable {
 			while (status != null && !status.isEmpty()) {
 				status = zkSession.getNodeData(statusNode);
 			}
-		} catch (NullPointerException | UnsupportedEncodingException | KeeperException | InterruptedException e) {
+		} catch (NullPointerException | KeeperException | InterruptedException e) {
 			log.warn("Exception while attempting to notify ECS", e);
 		}
 	}
@@ -530,7 +529,8 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public boolean moveData(String[] hashRange, String targetName) {
-		log.info("Moving data in range " + hashRange + " from " + this.name + " to " + targetName);
+		log.info("Moving data in range [" + hashRange[0] + "," + hashRange[1] + "]"
+				+ " from " + this.name + " to " + targetName);
 		String targetNode;
 		try {
 			targetNode = zkSession.createMigrationZnode(this.name, targetName);

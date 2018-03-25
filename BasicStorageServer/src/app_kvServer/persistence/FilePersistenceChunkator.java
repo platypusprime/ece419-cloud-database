@@ -1,6 +1,6 @@
 package app_kvServer.persistence;
 
-import static common.zookeeper.ZKSession.UTF_8;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -28,7 +28,7 @@ public class FilePersistenceChunkator implements KVPersistenceChunkator {
 	 * @throws FileNotFoundException If the persistence file cannot be found
 	 */
 	public FilePersistenceChunkator(String filename) throws FileNotFoundException {
-		this.scanner = new Scanner(new File(filename), UTF_8);
+		this.scanner = new Scanner(new File(filename), UTF_8.name());
 	}
 
 	@Override

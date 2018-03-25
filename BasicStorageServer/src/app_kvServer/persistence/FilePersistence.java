@@ -1,6 +1,6 @@
 package app_kvServer.persistence;
 
-import static common.zookeeper.ZKSession.UTF_8;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -80,7 +80,7 @@ public class FilePersistence implements KVPersistence {
 
 	@Override
 	public boolean containsKey(String key) {
-		try (Scanner scanner = new Scanner(new File(filename), UTF_8)) {
+		try (Scanner scanner = new Scanner(new File(filename), UTF_8.name())) {
 			while (scanner.hasNextLine()) {
 				String currKey = scanner.next("[^ ]+");
 				if (currKey.equals(key)) return true;
@@ -110,7 +110,7 @@ public class FilePersistence implements KVPersistence {
 	public String get(String key) {
 		log.info("Looking up key '" + key + "' in persistence...");
 
-		try (Scanner scanner = new Scanner(new File(filename), UTF_8)) {
+		try (Scanner scanner = new Scanner(new File(filename), UTF_8.name())) {
 			while (scanner.hasNextLine()) {
 				String currKey = scanner.findInLine("[^ ]+");
 				if (currKey.equals(key)) {
@@ -136,7 +136,7 @@ public class FilePersistence implements KVPersistence {
 		Map<String, String> pairs = new HashMap<String, String>();
 		log.info("Loading all key values pairs from persistence...");
 	
-		try (Scanner scanner = new Scanner(new File(filename), "UTF-8")) {
+		try (Scanner scanner = new Scanner(new File(filename), UTF_8.name())) {
 			while (scanner.hasNextLine()) {
 				String key = scanner.findInLine("[^ ]+");
 				String value = scanner.findInLine("(?<= )[^\\n]+");

@@ -1,7 +1,8 @@
 package common.zookeeper;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -32,9 +33,6 @@ import ecs.IECSNodeSerializer;
  * Provides a wrapper around the public ZooKeeper API.
  */
 public class ZKSession {
-
-	/** The name of the UTF-8 character encoding, used throughout this project. */
-	public static final String UTF_8 = "UTF-8";
 
 	/**
 	 * The status string for stopped service. Servers should not accept client
@@ -253,12 +251,7 @@ public class ZKSession {
 		byte[] b = zookeeper.getData(path, callback, getDataStat);
 		log.trace(path + " stat: " + getDataStat.toString());
 
-		try {
-			return new String(b, UTF_8);
-		} catch (UnsupportedEncodingException e) {
-			log.error("Exception occured while decoding data", e);
-			return null;
-		}
+		return new String(b, UTF_8);
 	}
 
 	/**
@@ -299,12 +292,7 @@ public class ZKSession {
 	 * @throws InterruptedException If the transaction is interrupted
 	 */
 	public void updateNode(String path, String data) throws KeeperException, InterruptedException {
-		try {
-			updateNode(path, data.getBytes(UTF_8));
-		} catch (UnsupportedEncodingException e) {
-			// should never happen
-			log.error("Could not encode data \"" + data + "\" with encoding " + UTF_8, e);
-		}
+		updateNode(path, data.getBytes(UTF_8));
 	}
 
 	/**
@@ -363,12 +351,7 @@ public class ZKSession {
 	private byte[] serializeMetadataMap(Collection<IECSNode> nodes) {
 		List<IECSNode> nodesList = new ArrayList<>(nodes);
 		String serializedNodes = gson.toJson(nodesList);
-		try {
-			return serializedNodes.getBytes(UTF_8);
-		} catch (UnsupportedEncodingException e) {
-			log.error("Could not encode serialized metadata", e);
-			return null;
-		}
+		return serializedNodes.getBytes(UTF_8);
 	}
 
 	/**
