@@ -14,7 +14,7 @@ import org.apache.log4j.PatternLayout;
 public class LogSetup {
 
 	/** The pattern string to set for the file appender. */
-	public static final String FILE_PATTERN = "[%d{ISO8601}][%-5p][%t][%c] %m%n";
+	public static final String FILE_PATTERN = "[%d{ISO8601}][%-5p][%t - %c] %m%n";
 
 	/**
 	 * Defeats instantiation.
@@ -51,7 +51,7 @@ public class LogSetup {
 
 		PatternLayout consoleLayout = new PatternLayout(consolePattern);
 		ConsoleAppender consoleAppender = new ConsoleAppender(consoleLayout);
-		consoleAppender.setThreshold(Level.INFO);
+//		consoleAppender.setThreshold(Level.INFO);
 		consoleAppender.setName("stdout");
 
 		Logger rootLogger = Logger.getRootLogger();
@@ -60,6 +60,10 @@ public class LogSetup {
 		rootLogger.removeAppender("file");
 		rootLogger.addAppender(fileAppender);
 		rootLogger.setLevel(level);
+		
+		// suppress logs from ZooKeeper library
+		Logger zkLogger = Logger.getLogger("org.apache.zookeeper");
+		zkLogger.setLevel(Level.WARN);
 	}
 
 	/**

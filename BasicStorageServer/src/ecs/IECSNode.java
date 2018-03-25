@@ -39,58 +39,6 @@ public interface IECSNode {
 	public String getNodeName();
 
 	/**
-	 * Returns the path for the parent ZNode for all ZNodes specific to this server.
-	 * 
-	 * @return The ZNode path for the base ZNode
-	 */
-	public default String getBaseNodePath() {
-		return "/" + getNodeName();
-	}
-
-	/**
-	 * Returns the path for the ZNode used for communications between
-	 * an arbitrary peer.
-	 * 
-	 * @param peer The name of the peer to be communicated with
-	 * @return The ZNode path for the specified peer
-	 */
-	public default String getZNodePath(String peer) {
-		return getBaseNodePath() + "/" + peer;
-	}
-
-	/**
-	 * Returns the path for the ZNode used for receiving migrated data from other servers
-	 *
-	 * @return The ZNode path for migration
-	 */
-	public default String getMigrationNodePath() {
-		return getZNodePath("migration");
-	}
-
-	public default String getMigrationNodePath(String peer) {
-	    return getMigrationNodePath() + "/" + peer;
-    }
-
-	/**
-	 * Returns the path for the ZNode used for receiving replicated data from other servers
-	 *
-	 * @return The ZNode path for replication
-	 */
-	public default String getReplicationNodePath() {
-		return getZNodePath("replication");
-	}
-
-	/**
-	 * Returns the path for the ZNode used for communications between the ECS and
-	 * the associated server.
-	 * 
-	 * @return The ECS node path
-	 */
-	public default String getECSNodePath() {
-		return getZNodePath("ecs");
-	}
-
-	/**
 	 * Returns the hostname for this node.
 	 * 
 	 * @return The hostname of the node (e.g. "8.8.8.8")

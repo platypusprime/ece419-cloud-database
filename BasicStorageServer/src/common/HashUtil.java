@@ -1,5 +1,7 @@
 package common;
 
+import static common.zookeeper.ZKSession.UTF_8;
+
 import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -8,6 +10,8 @@ import java.security.NoSuchAlgorithmException;
  * Provides utility methods for handling hashing operations.
  */
 public class HashUtil {
+
+	private static final String MD5 = "MD5";
 
 	/** The smallest possible value for a valid MD5 hash. */
 	public static final String MIN_MD5 = "00000000000000000000000000000000";
@@ -42,8 +46,8 @@ public class HashUtil {
 		byte[] mdbytes;
 
 		try {
-			md = MessageDigest.getInstance("MD5");
-			mdbytes = md.digest(s.getBytes("UTF-8"));
+			md = MessageDigest.getInstance(MD5);
+			mdbytes = md.digest(s.getBytes(UTF_8));
 		} catch (NoSuchAlgorithmException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();

@@ -30,8 +30,18 @@ public interface KVPersistence {
 	 * Retrieves all key-value pairs currently in the storage
 	 * 
 	 * @return Map of key-value pairs
+	 * @deprecated Use {@link #iterator()} instead.
 	 */
+	@Deprecated
 	public Map<String, String> getAll();
+
+	/**
+	 * Retrieves a new chunk-based iterator for batch access to key-value pairs in
+	 * this persistence.
+	 * 
+	 * @return A new iterator
+	 */
+	public KVPersistenceIterator iterator();
 
 	/**
 	 * Inserts or updates the given key-value pair in the persistence.
@@ -56,5 +66,12 @@ public interface KVPersistence {
 	 * Removes all key-value pairs from the persistence.
 	 */
 	public void clear();
+
+	/**
+	 * Removes all key-value pairs in the given range from the persistence.
+	 * 
+	 * @param hashRange The key hash range to clear
+	 */
+	public void clearRange(String[] hashRange);
 
 }

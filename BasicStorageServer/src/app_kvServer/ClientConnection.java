@@ -4,8 +4,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.util.Objects;
 
 import org.apache.log4j.Logger;
+
+import com.google.gson.JsonSyntaxException;
 
 import app_kvServer.KVServer.ServerStatus;
 import common.HashUtil;
@@ -31,8 +34,6 @@ public class ClientConnection implements Runnable {
 
 	private boolean isOpen;
 
-	// TODO implement equals()
-
 	/**
 	 * Constructs a new CientConnection object for a given TCP socket.
 	 * 
@@ -56,112 +57,100 @@ public class ClientConnection implements Runnable {
 			isOpen = true;
 			while (isOpen) {
 
-				// receive message from client
-				String inStr = null;
-				KVMessage request = null;
-				try {
-					log.info("Listening for client messages");
-					inStr = streamUtil.receiveString(in);
-					// TODO validate message type
-					// String msgType = streamUtil.identifyMessageType(inStr);
-					request = streamUtil.deserializeKVMessage(inStr);
-				} catch (IOException e) {
-					log.error("Error! Connection lost!", e);
-					isOpen = false;
-				}
+				KVMessage request = receiveRequest(in);
+				if (request == null) continue;
 
-				if (request == null) {
-					log.error("Invalid incoming message: " + inStr);
-					return;
+				KVMessage response = createResponse(request);
+				if (response != null) {
+					streamUtil.sendMessage(out, response);
+				} else {
+					log.error("Could not create response to request " + request);
 				}
-				
-				ServerStatus serverStatus = server.getStatus();
-
-				String outKey = null;
-				String outValue = null;
-				StatusType outStatus = null;
-				
-				if (serverStatus == ServerStatus.STOPPED) {
-					outStatus = StatusType.SERVER_STOPPED;
-				}
-				else {
-					outKey = request.getKey();
-					
-					// Check if server is responsible for this key
-					String keyHash = HashUtil.toMD5(outKey);
-					if (!server.getCurrentConfig().containsHash(keyHash)) {
-						
-						// Send metadata update message containing info for the server that is responsible for this key
-						IECSNode correctServer = server.findServer(keyHash);
-						MetadataUpdateMessage msg = new MetadataUpdateMessage(correctServer);
-						streamUtil.sendMessage(out, msg);
-						log.info("Sent Metadata response: " + correctServer);
-						continue;
-					}
-					
-					switch (request.getStatus()) {
-					case GET:
-						try {
-							outValue = server.getKV(request.getKey());
-							if (outValue != null) {
-								outStatus = StatusType.GET_SUCCESS;
-								log.info("get success: " + request.getKey() + ":" + outValue);
-							} else {
-								outStatus = StatusType.GET_ERROR;
-								log.warn("result of get is null; reporting error");
-							}
-						} catch (Exception e) {
-							outStatus = StatusType.GET_ERROR;
-							log.error("error while retrieving get result", e);
-						}
-						break;
-
-					case PUT:
-						if (serverStatus == ServerStatus.WRITE_LOCKED) {
-							outStatus = StatusType.SERVER_WRITE_LOCK;
-							break;
-						}
-						boolean keyExists = server.inCache(request.getKey()) || server.inStorage(request.getKey());
-						boolean valueEmpty = request.getValue() == null || request.getValue().isEmpty();
-						outValue = request.getValue();
-						try {
-							server.putKV(request.getKey(), request.getValue());
-							if (keyExists && valueEmpty) {
-								outStatus = StatusType.DELETE_SUCCESS;
-							} else if (!keyExists && valueEmpty) {
-								outStatus = StatusType.DELETE_ERROR;
-							} else if (keyExists && !valueEmpty) {
-								outStatus = StatusType.PUT_UPDATE;
-							} else if (!keyExists && !valueEmpty) {
-								outStatus = StatusType.PUT_SUCCESS;
-							}
-						} catch (Exception e) {
-							if (valueEmpty) {
-								outStatus = StatusType.DELETE_ERROR;
-							} else {
-								outStatus = StatusType.PUT_ERROR;
-							}
-							log.error("error while retrieving put result", e);
-						}
-						break;
-
-					default:
-						// ignore unexpected requests
-						break;
-					}
-				}
-				
-				KVMessage outMsg = new BasicKVMessage(outKey, outValue, outStatus);
-				streamUtil.sendMessage(out, outMsg);
 
 				/* connection either terminated by the client or lost due to network problems */
-
 			}
 
 		} catch (IOException e) {
 			log.error("Error! Connection could not be established!", e);
 
 		}
+	}
+
+	private KVMessage createResponse(KVMessage request) {
+		String outKey = request.getKey();
+		String outValue = null;
+		StatusType outStatus = null;
+
+		ServerStatus serverStatus = this.server.getStatus();
+
+		if (serverStatus == ServerStatus.STOPPED) {
+			return new BasicKVMessage(null, null, StatusType.SERVER_STOPPED);
+		}
+
+		// Check if server is responsible for this key
+		String keyHash = HashUtil.toMD5(outKey);
+		if (!server.getServerConfig().containsHash(keyHash)) {
+
+			// Send metadata update message containing info for the server that is
+			// responsible for this key
+			IECSNode correctServer = server.getServiceConfig().findResponsibleServer(keyHash);
+			log.info("Sending metadata response: " + correctServer);
+			return new MetadataUpdateMessage(correctServer);
+		}
+
+		switch (request.getStatus()) {
+		case GET:
+			try {
+				outValue = server.getKV(request.getKey());
+				if (outValue != null) {
+					outStatus = StatusType.GET_SUCCESS;
+					log.info("get success: " + request.getKey() + ":" + outValue);
+				} else {
+					outStatus = StatusType.GET_ERROR;
+					log.warn("result of get is null; reporting error");
+				}
+
+			} catch (Exception e) {
+				outStatus = StatusType.GET_ERROR;
+				log.error("error while retrieving get result", e);
+			}
+			break;
+
+		case PUT:
+			if (serverStatus == ServerStatus.WRITE_LOCKED) {
+				return new BasicKVMessage(null, null, StatusType.SERVER_WRITE_LOCK);
+			}
+
+			boolean keyExists = server.inCache(request.getKey()) || server.inStorage(request.getKey());
+			boolean valueEmpty = request.getValue() == null || request.getValue().isEmpty();
+			outValue = request.getValue();
+			try {
+				server.putKV(request.getKey(), request.getValue());
+				if (keyExists && valueEmpty) {
+					outStatus = StatusType.DELETE_SUCCESS;
+				} else if (!keyExists && valueEmpty) {
+					outStatus = StatusType.DELETE_ERROR;
+				} else if (keyExists && !valueEmpty) {
+					outStatus = StatusType.PUT_UPDATE;
+				} else if (!keyExists && !valueEmpty) {
+					outStatus = StatusType.PUT_SUCCESS;
+				}
+
+			} catch (Exception e) {
+				if (valueEmpty) {
+					outStatus = StatusType.DELETE_ERROR;
+				} else {
+					outStatus = StatusType.PUT_ERROR;
+				}
+				log.error("error while retrieving put result", e);
+			}
+			break;
+
+		default:
+			return null;
+		}
+
+		return new BasicKVMessage(outKey, outValue, outStatus);
 	}
 
 	/**
@@ -172,6 +161,42 @@ public class ClientConnection implements Runnable {
 	public void close() throws IOException {
 		isOpen = false;
 		clientSocket.close();
+	}
+
+	private KVMessage receiveRequest(InputStream in) {
+		// receive message from client
+		String inStr = null;
+		KVMessage request = null;
+		try {
+			log.info("Listening for client messages");
+			inStr = streamUtil.receiveString(in);
+			// TODO validate message type
+			// String msgType = streamUtil.identifyMessageType(inStr);
+			request = streamUtil.deserializeKVMessage(inStr);
+
+		} catch (JsonSyntaxException e) {
+			log.error("Could not deserialize request: " + inStr, e);
+		} catch (IOException e) {
+			log.error("Error! Connection lost!", e);
+			this.isOpen = false;
+		}
+
+		return request;
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (!(o instanceof ClientConnection)) {
+			return false;
+		}
+
+		ClientConnection otherConnection = (ClientConnection) o;
+		return Objects.equals(this.clientSocket, otherConnection.clientSocket);
+	}
+
+	@Override
+	public int hashCode() {
+		return this.clientSocket.hashCode();
 	}
 
 }

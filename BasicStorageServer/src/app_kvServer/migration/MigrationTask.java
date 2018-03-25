@@ -1,5 +1,7 @@
 package app_kvServer.migration;
 
+import static common.zookeeper.ZKSession.UTF_8;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -14,6 +16,7 @@ import com.google.gson.reflect.TypeToken;
 
 import app_kvServer.persistence.KVPersistence;
 
+@Deprecated
 public class MigrationTask implements Runnable {
 	
 	public enum OpType {
@@ -80,7 +83,7 @@ public class MigrationTask implements Runnable {
 			// Send back response
 			OutputStream out = socket.getOutputStream();
 			String responseStr = "MIGRATION_SUCCESSFUL" + '\n';
-			byte[] msgBytes = responseStr.getBytes("UTF-8");
+			byte[] msgBytes = responseStr.getBytes(UTF_8);
 
 			out.write(msgBytes, 0, msgBytes.length);
 			out.flush();
@@ -90,18 +93,18 @@ public class MigrationTask implements Runnable {
 			log.error("Could not receive data from source server", e);
 		}
 	}
-	
+
 	private void send() {
 		try {
 			OutputStream out = socket.getOutputStream();
-			Map<String, String> data = persistenceManager.getAll();
+			Map<String, String> data = null /* persistenceManager.getAll() */;
 			String msgStr = new Gson().toJson(data) + '\n';
-			byte[] msgBytes = msgStr.getBytes("UTF-8");
+			byte[] msgBytes = msgStr.getBytes(UTF_8);
 
 			out.write(msgBytes, 0, msgBytes.length);
 			out.flush();
 			log.info("Sent message: '" + msgStr.trim() + "'");
-			
+
 		} catch (IOException e) {
 			log.error("Could not send data to target server", e);
 			return;
@@ -112,7 +115,7 @@ public class MigrationTask implements Runnable {
 			InputStream in = socket.getInputStream();
 			String res = read(in);
 			log.info("Received message: '" + res.trim() + "'");
-			
+
 		} catch (IOException e) {
 			log.error("Could not get response from target server", e);
 		}
@@ -167,7 +170,7 @@ public class MigrationTask implements Runnable {
 		}
 
 		msgBytes = tmp;
-		String msgString = new String(msgBytes, "UTF-8");
+		String msgString = new String(msgBytes, UTF_8);
 		return msgString;
 	}
 	

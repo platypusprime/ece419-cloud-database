@@ -1,17 +1,21 @@
 package app_kvServer.persistence;
 
+import static common.zookeeper.ZKSession.UTF_8;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
-import java.util.Scanner;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Scanner;
 
 import org.apache.log4j.Logger;
+
+import common.HashUtil;
 
 /**
  * This class manipulates a file-based persistence system for key-value
@@ -76,7 +80,7 @@ public class FilePersistence implements KVPersistence {
 
 	@Override
 	public boolean containsKey(String key) {
-		try (Scanner scanner = new Scanner(new File(filename), "UTF-8")) {
+		try (Scanner scanner = new Scanner(new File(filename), UTF_8)) {
 			while (scanner.hasNextLine()) {
 				String currKey = scanner.next("[^ ]+");
 				if (currKey.equals(key)) return true;
@@ -106,7 +110,7 @@ public class FilePersistence implements KVPersistence {
 	public String get(String key) {
 		log.info("Looking up key '" + key + "' in persistence...");
 
-		try (Scanner scanner = new Scanner(new File(filename), "UTF-8")) {
+		try (Scanner scanner = new Scanner(new File(filename), UTF_8)) {
 			while (scanner.hasNextLine()) {
 				String currKey = scanner.findInLine("[^ ]+");
 				if (currKey.equals(key)) {
@@ -127,6 +131,7 @@ public class FilePersistence implements KVPersistence {
 	}
 
 	@Override
+	@Deprecated
 	public Map<String, String> getAll() {
 		Map<String, String> pairs = new HashMap<String, String>();
 		log.info("Loading all key values pairs from persistence...");
@@ -146,6 +151,16 @@ public class FilePersistence implements KVPersistence {
 		}
 	
 		return pairs;
+	}
+
+	@Override
+	public KVPersistenceIterator iterator() {
+		try {
+			return new FilePersistenceIterator(filename);
+		} catch (FileNotFoundException e) {
+			log.error("Persistence file could not be found", e);
+			return null;
+		}
 	}
 
 	@Override
@@ -183,7 +198,7 @@ public class FilePersistence implements KVPersistence {
 				targetChannel.position(prevValue.length());
 				sourceChannel.transferFrom(targetChannel, newOffset, (fileSize - offset));
 			} else {
-				r.write(String.format("%s %s\n", key, value).getBytes("UTF-8"));
+				r.write(String.format("%s %s\n", key, value).getBytes(UTF_8));
 			}
 
 		} catch (IOException e) {
@@ -198,20 +213,20 @@ public class FilePersistence implements KVPersistence {
 		try {
 			RandomAccessFile r = new RandomAccessFile(filename, "rw");
 			r.seek(r.length());
-	
+
 			for (Entry<String, String> entry : pairs.entrySet()) {
 				String key = entry.getKey();
 				String value = entry.getValue();
-	
-				r.write(String.format("%s %s\n", key, value).getBytes("UTF-8"));
+
+				r.write(String.format("%s %s\n", key, value).getBytes(UTF_8));
 			}
 			r.close();
-	
+
 		} catch (IOException e) {
 			log.error("I/O exception while writing to persistence file", e);
 			return false;
 		}
-	
+
 		return true;
 	}
 
@@ -247,9 +262,6 @@ public class FilePersistence implements KVPersistence {
 			log.error("I/O exception while writing to persistence file", e);
 		}
 
-		// delete temporary file
-		new File("put.temp").delete();
-
 		return prevValue;
 	}
 
@@ -261,6 +273,29 @@ public class FilePersistence implements KVPersistence {
 		} catch (IOException e) {
 			log.error("I/O exception while clearing persistence file", e);
 		}
+	}
+
+	@Override
+	public void clearRange(String[] hashRange) {
+		try (RandomAccessFile r = new RandomAccessFile(filename, "rw");
+				RandomAccessFile rtemp = new RandomAccessFile(generateScratchFile(), "rw");
+				FileChannel sourceChannel = r.getChannel();
+				FileChannel targetChannel = rtemp.getChannel()) {
+
+			String ln;
+			while ((ln = r.readLine()) != null) {
+				String key = ln.substring(0, ln.indexOf(' '));
+				if (!HashUtil.containsHash(HashUtil.toMD5(key), hashRange)) {
+					rtemp.write(ln.concat("\n").getBytes(UTF_8));
+				}
+			}
+
+			sourceChannel.transferFrom(targetChannel, 0, rtemp.length());
+
+		} catch (IOException e) {
+			log.error("I/O exception while writing to persistence file", e);
+		}
+
 	}
 
 }

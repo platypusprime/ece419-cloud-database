@@ -1,5 +1,9 @@
 package app_kvServer;
 
+import static common.zookeeper.ZKPathUtil.KV_SERVICE_STATUS_NODE;
+import static common.zookeeper.ZKSession.FINISHED;
+import static common.zookeeper.ZKSession.UTF_8;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -14,24 +18,24 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
 import java.util.Optional;
-import java.util.TreeMap;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.KeeperException;
-import org.apache.zookeeper.WatchedEvent;
-import org.apache.zookeeper.Watcher;
-import org.apache.zookeeper.Watcher.Event.EventType;
 
 import app_kvServer.cache.FifoCache;
 import app_kvServer.cache.KVCache;
 import app_kvServer.cache.LfuCache;
 import app_kvServer.cache.LruCache;
-import app_kvServer.migration.MigrationManager;
+import app_kvServer.migration.MigrationMessage;
+import app_kvServer.migration.MigrationReceiveTask;
 import app_kvServer.persistence.FilePersistence;
 import app_kvServer.persistence.KVPersistence;
+import app_kvServer.persistence.KVPersistenceIterator;
+import common.HashUtil;
+import common.KVServiceTopology;
+import common.zookeeper.ZKPathUtil;
 import common.zookeeper.ZKSession;
 import ecs.IECSNode;
 import logger.LogSetup;
@@ -48,6 +52,7 @@ public class KVServer implements IKVServer, Runnable {
 	private final KVCache cache;
 	private final KVPersistence persistence;
 
+	/** Contains values for possible server states. */
 	public static enum ServerStatus {
 		/** Server running and serving all requests normally */
 		RUNNING,
@@ -61,13 +66,15 @@ public class KVServer implements IKVServer, Runnable {
 	private boolean isWriteLocked = false;
 
 	private ServerSocket serverSocket;
-	private List<ClientConnection> clients = new ArrayList<>(); // TODO handle de-registering clients
+	// TODO handle de-registering clients
+	private List<ClientConnection> clients = new ArrayList<>();
 
 	private final String name;
 	private final ZKSession zkSession;
 
 	private IECSNode config = null;
-	private NavigableMap<String, IECSNode> hashring = new TreeMap<>();
+	private KVServiceTopology serviceConfig;
+	private ServiceStatusWatcher serviceStatusWatcher = null;
 
 	/**
 	 * Main entry point for the key-value server application.
@@ -114,7 +121,8 @@ public class KVServer implements IKVServer, Runnable {
 	}
 
 	/**
-	 * Start KV Server with selected name
+	 * Starts a KV server with the given name and ZooKeeper configuration. All
+	 * additional configuration is obtained from ZooKeeper, as provided by the ECS.
 	 * 
 	 * @param name Unique name of server
 	 * @param zkHostname Hostname where ZooKeeper is running
@@ -128,39 +136,38 @@ public class KVServer implements IKVServer, Runnable {
 		}
 		this.name = name;
 		this.zkSession = new ZKSession(zkHostname, zkPort);
+		this.serviceStatusWatcher = new ServiceStatusWatcher(this, zkSession);
 
-		// attempt to retrieve startup information from ZooKeeper
-		while (true) { // TODO replace infinite loop
-			Collection<IECSNode> nodes = zkSession.getMetadataNodeData(new ServiceTopologyWatcher(this, zkSession));
+		// Attempt to retrieve startup information from ZooKeeper
+		/* NOTE: the ECS is blocked from making topology changes until the server is
+		 * fully set up so setting the watcher here should be safe */
+		Collection<IECSNode> nodes = zkSession.getMetadataNodeData(new ServiceTopologyWatcher(this, zkSession));
+		setServiceConfig(nodes);
 
-			setCachedMetadata(nodes);
+		// Set fields based on config
+		if (this.config != null) {
+			this.port = this.config.getNodePort();
 
-			for (IECSNode node : nodes) {
-				if (this.name.equals(node.getNodeName())) {
-					this.config = node;
+			// set up cache
+			String cacheStrategy = this.config.getCacheStrategy();
+			int cacheSize = this.config.getCacheSize();
 
-					this.port = node.getNodePort();
+			this.cache = chooseCache(cacheStrategy, cacheSize);
 
-					// set up cache
-					String cacheStrategy = node.getCacheStrategy();
-					int cacheSize = node.getCacheSize();
+			// set up storage
+			String storageIdentifier = this.name + "-data.csv";
+			this.persistence = new FilePersistence(storageIdentifier);
 
-					this.cache = chooseCache(cacheStrategy, cacheSize);
+			log.info("Created KVServer with "
+					+ "port=" + port + ", "
+					+ "cacheSize=" + cacheSize + ", "
+					+ "strategy=" + cacheStrategy);
 
-					// set up storage
-					String storageIdentifier = this.name + "-data.csv";
-					this.persistence = new FilePersistence(storageIdentifier);
+			// begin execution on new thread
+			new Thread(this).start();
 
-					log.info("Created KVServer with "
-							+ "port=" + port + ", "
-							+ "cacheSize=" + cacheSize + ", "
-							+ "strategy=" + cacheStrategy);
-
-					// begin execution on new thread
-					new Thread(this).start();
-					return;
-				}
-			}
+		} else {
+			throw new IllegalStateException("Could not find server's config in service configuration znode");
 		}
 	}
 
@@ -226,20 +233,27 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public void run() {
+		// Bind listening port
 		boolean isInit = initializeServer();
 		if (!isInit) {
 			log.fatal("Could not initialize server");
 			return;
 		}
 
-		// Check if any data is waiting to be migrated from other nodes
-		readMigrationNode();
-
-		// Send acknowledgement to ECS
-		notifyECS();
-		
 		// Setup sync for server status with KV service global status
-		syncServerStatus();
+		if (serviceStatusWatcher != null) {
+			try {
+				zkSession.getNodeData(KV_SERVICE_STATUS_NODE, serviceStatusWatcher);
+			} catch (KeeperException | InterruptedException e) {
+				log.error("Exception while setting up service status watcher", e);
+			}
+		}
+
+		// Send notification of initialization success to ECS
+		notifyEcs();
+
+		// Check if there is any initial data that needs to be transferred in
+		completeInitialMigration();
 
 		// main accept loop
 		while (!serverSocket.isClosed()) {
@@ -291,65 +305,52 @@ public class KVServer implements IKVServer, Runnable {
 	}
 
 	/**
-	 * Uses this server's ZNode to communicate with the ECS (e.g. for sending
+	 * Uses this server's znode to communicate with the ECS (e.g. for sending
 	 * notification of startup).
 	 */
-	protected void notifyECS() {
+	protected void notifyEcs() {
 		try {
-			zkSession.updateNode(config.getBaseNodePath(), "FINISHED".getBytes("UTF-8"));
+			String statusNode = ZKPathUtil.getStatusZnode(config);
+			zkSession.updateNode(statusNode, FINISHED.getBytes(UTF_8));
+
+			// busy-wait until ECS clears the FINISHED message
+			String status = zkSession.getNodeData(statusNode);
+			while (status != null && !status.isEmpty()) {
+				status = zkSession.getNodeData(statusNode);
+			}
 		} catch (NullPointerException | UnsupportedEncodingException | KeeperException | InterruptedException e) {
 			log.warn("Exception while attempting to notify ECS", e);
 		}
 	}
 
-    private void readMigrationNode() {
-        List<String> childNodes = zkSession.getChildNodes(config.getMigrationNodePath(), new Watcher() {
-            @Override
-            public void process(WatchedEvent watchedEvent) {
-                if (watchedEvent.getType() == EventType.NodeChildrenChanged) {
-                    readMigrationNode();
-                }
-            }
-        });
-
-        if (childNodes == null) {
-            log.warn("Child nodes for " + config.getMigrationNodePath() + " is NULL");
-            return;
-        }
-
-        // Receive migrated data from other servers
-        MigrationManager.receiveData(childNodes, zkSession, this);
-    }
-
-	private void syncServerStatus() {
-		try {
-			String kvStatus = zkSession.getNodeData(ZKSession.KV_SERVICE_STATUS_NODE, new Watcher() {
-
-				@Override
-				public void process(WatchedEvent event) {
-					if (event.getType() == EventType.NodeDataChanged) {
-						syncServerStatus();
-					}
-
-                    // Shutdown server if its node has been deleted
-					else if (event.getType() == EventType.NodeDeleted) {
-					    kill();
-                    }
-				}
-			});
-			
-			if (kvStatus.equals(ZKSession.RUNNING_STATUS)) {
-				this.status = ServerStatus.RUNNING;
-			}
-			else if (kvStatus.equals(ZKSession.STOPPED_STATUS)) {
-				this.status = ServerStatus.STOPPED;
-			}
-			
-			log.info("Server status changed to: " + kvStatus);
-			
-		} catch (KeeperException | InterruptedException e) {
-			log.warn("Exception while checking KV Service status", e);
+	/**
+	 * Executes the initial key-value pair migration for this server. Should be
+	 * called after notifying the ECS of startup success.
+	 * <p>
+	 * Since a fresh server has no reference service topology to compare the current
+	 * one against, it has no way of knowing which server it needs to receive data
+	 * from (if any). Thus this method checks the child nodes of the root migration
+	 * znode to find its migration data source. In the case of initial migration it
+	 * is guaranteed that this server will receive data from at most one
+	 * transferrer.
+	 */
+	private void completeInitialMigration() {
+		// Locate migration data source
+		String migrationRootZnode = ZKPathUtil.getMigrationRootZnode(config);
+		List<String> childNodes = zkSession.getChildNodes(migrationRootZnode, null);
+		while (childNodes == null || childNodes.isEmpty()) {
+			childNodes = zkSession.getChildNodes(migrationRootZnode, null);
 		}
+
+		if (childNodes.size() != 1) {
+			log.warn("Unexpected number of migration znode children: " + childNodes.size());
+			return;
+		}
+
+		// Receive migrated data from other servers
+		String transferNode = migrationRootZnode + childNodes.get(0);
+		MigrationReceiveTask initialMigrationTask = new MigrationReceiveTask(transferNode, zkSession, this);
+		initialMigrationTask.run();
 	}
 
 	@Override
@@ -417,10 +418,6 @@ public class KVServer implements IKVServer, Runnable {
 					return value;
 				});
 	}
-
-	public synchronized Map<String, String> getAllKV() {
-	    return persistence.getAll();
-    }
 
 	@Override
 	public synchronized void putKV(String key, String value) {
@@ -493,67 +490,93 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public boolean moveData(String[] hashRange, String targetName) {
-	    return MigrationManager.sendData(hashRange, targetName, zkSession, this);
-	}
-
-	public NavigableMap<String, IECSNode> getCachedMetadata() {
-		return hashring;
-	}
-
-	public void setCachedMetadata(Collection<IECSNode> nodes) {
-		hashring = new TreeMap<>();
-		nodes.forEach(node -> hashring.put(node.getNodeHashRangeStart(), node));
-		
-		for (IECSNode node : nodes) {
-			if (this.name.equals(node.getNodeName())) {
-				this.config = node;
-			}
+		String targetNode;
+		try {
+			targetNode = zkSession.createMigrationZnode(this.name, targetName);
+		} catch (KeeperException | InterruptedException e) {
+			log.error("Could not create migration znode", e);
+			return false;
 		}
+
+		try (KVPersistenceIterator it = persistence.iterator()) {
+
+			while (it.hasNextChunk()) {
+				Map<String, String> kvPairs = it
+						.nextChunk(key -> HashUtil.containsHash(HashUtil.toMD5(key), hashRange));
+
+				// Prepare message
+				MigrationMessage message = new MigrationMessage(kvPairs);
+				String data = message.toJSON();
+
+				// Send message via znode
+				zkSession.updateNode(targetNode, data);
+
+				// Busy-wait for target to consume
+				String response = zkSession.getNodeData(targetNode);
+				while (response != null && !response.isEmpty()) {
+					response = zkSession.getNodeData(targetNode);
+				}
+			}
+
+			// Signal transfer completion to target node
+			zkSession.updateNode(targetNode, FINISHED);
+
+			// Busy-wait for node deletion
+			boolean deleted = !zkSession.checkNodeExists(targetNode, null);
+			while (!deleted) {
+				deleted = !zkSession.checkNodeExists(targetNode, null);
+			}
+
+			// Remove sent data from own persistence
+			persistence.clearRange(hashRange);
+			log.info("Data transfer completed. Deleted from self.");
+
+		} catch (KeeperException | InterruptedException e) {
+			log.error("Error while transferring data to " + targetName, e);
+			return false;
+
+		} catch (IOException e) {
+			log.error("IO exception while reading persistence", e);
+			return false;
+		}
+
+		return true;
 	}
 
-	public IECSNode getCurrentConfig() {
+	/**
+	 * Returns the most recent metadata for this server.
+	 * 
+	 * @return This server's configuration
+	 */
+	public IECSNode getServerConfig() {
 		return config;
 	}
 
-	public IECSNode findSuccessor() {
-		return findSuccessor(config.getNodeHashRangeStart());
-	}
-
-	public IECSNode findSuccessor(String hash) {
-		return Optional.ofNullable(hashring.higherEntry(hash))
-				.orElse(hashring.firstEntry())
-				.getValue();
-	}
-
-	public IECSNode findPredecessor() {
-		return findPredecessor(config.getNodeHashRangeStart());
-	}
-
-	public IECSNode findPredecessor(String hash) {
-		return Optional.ofNullable(hashring.lowerEntry(hash))
-				.orElse(hashring.lastEntry())
-				.getValue();
-	}
-	
 	/**
-	 * Identifies the server which is responsible for the given hash, given the
-	 * information available to this cache.
+	 * Retrieves the most recent metadata for the entire service.
 	 * 
-	 * @param keyHash The MD5 hash for the key to find a server for
-	 * @return The server matching the key,
-	 *         or <code>null</code> if the cache is empty
+	 * @return The service topology
 	 */
-	public IECSNode findServer(String keyHash) {
-
-		if (hashring.isEmpty())
-			return null;
-
-		return Optional
-				// find the first server past the key in the hash ring
-				.ofNullable(hashring.ceilingEntry(keyHash))
-				.map(Map.Entry::getValue)
-
-				// otherwise use the first server (guaranteed to exist because of above check)
-				.orElse(hashring.firstEntry().getValue());
+	public KVServiceTopology getServiceConfig() {
+		return this.serviceConfig;
 	}
+
+	/**
+	 * Updates this server's cached service metadata with the given information.
+	 * 
+	 * @param nodes The updated node metadata for participating servers
+	 */
+	public void setServiceConfig(Collection<IECSNode> nodes) {
+		log.debug("Updating service configuration for server " + name);
+
+		this.serviceConfig = new KVServiceTopology(nodes);
+		IECSNode newConfig = this.serviceConfig.getNodeOfName(name);
+
+		if (newConfig != null) {
+			this.config = newConfig;
+		} else {
+			log.debug("Server " + name + " no longer exists in the topology");
+		}
+	}
+
 }

@@ -1,5 +1,7 @@
 package common.messages;
 
+import static common.zookeeper.ZKSession.UTF_8;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -21,8 +23,6 @@ public class StreamUtil {
 
 	/** The JSON attribute name for message type. */
 	public static final String TYPE_ATTR = "type";
-	
-	private static final String UTF8 = "UTF-8";
 	
 	private static final Logger log = Logger.getLogger(StreamUtil.class);
 
@@ -53,7 +53,7 @@ public class StreamUtil {
 	 */
 	public void sendMessage(OutputStream out, Object msg) throws IOException {
 		String msgStr = gson.toJson(msg) + "\n";
-		byte[] msgBytes = msgStr.getBytes(UTF8);
+		byte[] msgBytes = msgStr.getBytes(UTF_8);
 
 		out.write(msgBytes, 0, msgBytes.length);
 		out.flush();
@@ -119,7 +119,7 @@ public class StreamUtil {
 		}
 
 		msgBytes = tmp;
-		return new String(msgBytes, UTF8);
+		return new String(msgBytes, UTF_8);
 	}
 
 	/**

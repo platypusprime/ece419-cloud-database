@@ -7,6 +7,7 @@ import java.net.Socket;
 
 import org.apache.log4j.Logger;
 
+import common.KVServiceTopology;
 import common.messages.BasicKVMessage;
 import common.messages.KVMessage;
 import common.messages.KVMessage.StatusType;
@@ -22,7 +23,7 @@ public class KVStore implements KVCommInterface {
 	private static final Logger log = Logger.getLogger(KVStore.class);
 
 	private static final int MAX_KEY_LENGTH = 20;
-	private static final int MAX_VALUE_LENGTH = 120000;
+	private static final int MAX_VALUE_LENGTH = 120 * 1000;
 
 	private Socket clientSocket;
 	private OutputStream out;
@@ -31,7 +32,7 @@ public class KVStore implements KVCommInterface {
 	private IECSNode currentServer;
 	private boolean isConnected;
 
-	private final ServerMetadataCache mdCache;
+	private final KVServiceTopology mdCache;
 	private final StreamUtil streamUtil;
 
 	/**
@@ -42,8 +43,8 @@ public class KVStore implements KVCommInterface {
 	 */
 	public KVStore(String address, int port) {
 		this.currentServer = new ECSNode(address, port);
-		this.mdCache = new ServerMetadataCache();
-		mdCache.updateServer(currentServer);
+		this.mdCache = new KVServiceTopology();
+		mdCache.updateNode(currentServer);
 		this.isConnected = false;
 		this.streamUtil = new StreamUtil();
 	}
@@ -177,11 +178,11 @@ public class KVStore implements KVCommInterface {
 
 			if (response.getStatus() == StatusType.SERVER_NOT_RESPONSIBLE) {
 				// cached information for the selected server is stale; purge it from the cache
-				mdCache.invalidateServer(currentServer);
+				mdCache.invalidateNode(currentServer);
 
 				// update metadata for new server
 				IECSNode responsibleServer = response.getResponsibleServer();
-				mdCache.updateServer(responsibleServer);
+				mdCache.updateNode(responsibleServer);
 				
 				disconnect();
 				currentServer = responsibleServer;
