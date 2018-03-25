@@ -1,12 +1,13 @@
 package client;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.log4j.Logger;
 
+import common.HashUtil;
 import common.KVServiceTopology;
 import common.messages.BasicKVMessage;
 import common.messages.KVMessage;
@@ -25,12 +26,7 @@ public class KVStore implements KVCommInterface {
 	private static final int MAX_KEY_LENGTH = 20;
 	private static final int MAX_VALUE_LENGTH = 120 * 1000;
 
-	private Socket clientSocket;
-	private OutputStream out;
-	private InputStream in;
-
-	private IECSNode currentServer;
-	private boolean isConnected;
+	private Map<String, Socket> socketMap = new HashMap<>();
 
 	private final KVServiceTopology mdCache;
 	private final StreamUtil streamUtil;
@@ -42,23 +38,25 @@ public class KVStore implements KVCommInterface {
 	 * @param port the port of the KVServer
 	 */
 	public KVStore(String address, int port) {
-		this.currentServer = new ECSNode(address, port);
 		this.mdCache = new KVServiceTopology();
-		mdCache.updateNode(currentServer);
-		this.isConnected = false;
+		this.mdCache.updateNode(new ECSNode(address, port));
 		this.streamUtil = new StreamUtil();
 	}
 
 	@Override
 	public void connect() throws Exception {
-		clientSocket = new Socket();
-		clientSocket.connect(currentServer.getNodeSocketAddress());
-		this.isConnected = true;
+		for (IECSNode server : mdCache.getNodeSet()) {
+			String serverName = server.getNodeName();
+			if (!socketMap.containsKey(serverName)
+					|| !socketMap.get(serverName).isConnected()
+					|| socketMap.get(serverName).isClosed()) {
 
-		out = clientSocket.getOutputStream();
-		in = clientSocket.getInputStream();
-
-		log.info("Connection established");
+				Socket socket = new Socket();
+				socket.connect(server.getNodeSocketAddress());
+				log.info("Connection established with server " + serverName + " at " + server.getNodeSocketAddress());
+				socketMap.put(serverName, socket);
+			}
+		}
 	}
 
 	@Override
@@ -70,27 +68,25 @@ public class KVStore implements KVCommInterface {
 		} catch (IOException ioe) {
 			log.error("Unable to close connection!");
 		}
-
-		this.isConnected = false;
 	}
 
 	@Override
 	public boolean isConnected() {
-		return isConnected;
+		return socketMap.values().stream().anyMatch(socket -> socket.isConnected() && !socket.isClosed());
 	}
 
 	private void tearDownConnection() throws IOException {
-		log.info("tearing down the connection ...");
-		if (clientSocket != null) {
-			clientSocket.close();
-			clientSocket = null;
-			log.info("connection closed!");
+		log.info("Tearing down all connections...");
+		for (Socket socket : socketMap.values()) {
+			if (!socket.isClosed()) socket.close();
 		}
+		socketMap.clear();
+		log.info("All connection closed!");
 	}
 
 	@Override
 	public KVMessage put(String key, String value) throws Exception {
-		if (clientSocket == null)
+		if (!isConnected())
 			throw new IllegalStateException("Not currently connected to server");
 
 		validateKey(key);
@@ -100,7 +96,7 @@ public class KVStore implements KVCommInterface {
 
 	@Override
 	public KVMessage get(String key) throws Exception {
-		if (clientSocket == null)
+		if (!isConnected())
 			throw new IllegalStateException("Not currently connected to server");
 
 		validateKey(key);
@@ -154,8 +150,8 @@ public class KVStore implements KVCommInterface {
 
 	/**
 	 * Sends the specified <code>put</code> or <code>get</code> message to the
-	 * currently connected server, retrying transparently if the wrong server is
-	 * contacted.
+	 * server currently believed to be capable of serving the request, retrying
+	 * transparently if the wrong server is contacted.
 	 * 
 	 * @param message The <code>put</code> or <code>get</code> message to send
 	 * @return The final server response
@@ -163,6 +159,7 @@ public class KVStore implements KVCommInterface {
 	 *             communicating with the server
 	 */
 	private KVMessage sendMessage(KVMessage message) throws Exception {
+		String hash = HashUtil.toMD5(message.getKey());
 		String responseStr;
 		KVMessage response = null;
 		boolean gotRightServer = false;
@@ -170,22 +167,29 @@ public class KVStore implements KVCommInterface {
 		// keep contacting servers until the right one gets hit
 		while (!gotRightServer) {
 
-			// TODO handle case where server rejects request or is offline
-			streamUtil.sendMessage(out, message);
+			IECSNode cachedServer = mdCache.findResponsibleServer(hash);
+			boolean gotServerFromCache = cachedServer.containsHash(hash);
 
-			responseStr = streamUtil.receiveString(in);
+			Socket socket = socketMap.get(cachedServer.getNodeName());
+
+			// TODO handle case where server rejects request or is offline
+
+			streamUtil.sendMessage(socket.getOutputStream(), message);
+
+			responseStr = streamUtil.receiveString(socket.getInputStream());
 			response = streamUtil.deserializeKVMessage(responseStr);
 
 			if (response.getStatus() == StatusType.SERVER_NOT_RESPONSIBLE) {
 				// cached information for the selected server is stale; purge it from the cache
-				mdCache.invalidateNode(currentServer);
+				if (gotServerFromCache) {
+					mdCache.invalidateNode(cachedServer);
+				}
 
 				// update metadata for new server
 				IECSNode responsibleServer = response.getResponsibleServer();
 				mdCache.updateNode(responsibleServer);
-				
-				disconnect();
-				currentServer = responsibleServer;
+
+				// try to connect, in case this is a new server
 				connect();
 
 			} else {
