@@ -1,42 +1,45 @@
 package common.messages;
 
+import java.util.Objects;
+
 import ecs.IECSNode;
 
 /**
- * A message for communicating metadata updates.
+ * A message for responding to client requests sent to the wrong server. This
+ * message provides the client with updated metadata for the server which is
+ * currently responsible for the request.
  */
 public class MetadataUpdateMessage implements KVMessage {
-	
-	private IECSNode responsibleNode;
-	private StatusType status = StatusType.SERVER_NOT_RESPONSIBLE;
+
+	private static final StatusType MD_UPDATE_STATUS = StatusType.SERVER_NOT_RESPONSIBLE;
+
+	private final IECSNode responsibleServer;
 
 	/**
-	 * TODO document me
+	 * Creates a message for the given responsible server information.
 	 * 
-	 * @param metadata TODO document me
-	 * @param status TODO document me
+	 * @param responsibleServer The server information to pass on to the client
+	 * @throws NullPointerException If the given metadata is <code>null</code>
 	 */
-	public MetadataUpdateMessage(IECSNode responsibleNode) {
-		this.responsibleNode = responsibleNode;
+	public MetadataUpdateMessage(IECSNode responsibleServer) throws NullPointerException {
+		this.responsibleServer = Objects.requireNonNull(responsibleServer);
 	}
 
 	@Override
 	public StatusType getStatus() {
-		return this.status;
+		return MD_UPDATE_STATUS;
 	}
 
 	@Override
 	public IECSNode getResponsibleServer() {
-		return this.responsibleNode;
+		return this.responsibleServer;
 	}
-	
+
 	@Override
 	public String toString() {
 		StringBuilder msgBuilder = new StringBuilder("MetadataUpdateMessage{ ")
-				.append("status=\"").append(status == null ? "null" : status.name()).append("\" ")
-				.append("node_name=\"").append(responsibleNode.getNodeName() == null ? "null" : responsibleNode.getNodeName()).append("\" ")
-				.append("node_host=\"").append(responsibleNode.getNodeHost() == null ? "null" : responsibleNode.getNodeHost()).append("\" ")
-				.append("node_port=\"").append(responsibleNode.getNodePort()).append("\" ");
+				.append("status=\"").append(MD_UPDATE_STATUS).append("\" ")
+				.append("responsibleServer=").append(responsibleServer);
 
 		return msgBuilder.toString();
 	}
