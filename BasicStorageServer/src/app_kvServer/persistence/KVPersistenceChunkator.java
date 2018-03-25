@@ -8,7 +8,7 @@ import java.util.function.Predicate;
  * This interface provides the interface for chunk-wise iteration through
  * key-value pairs contained in a persistence.
  */
-public interface KVPersistenceIterator extends Closeable {
+public interface KVPersistenceChunkator extends Closeable {
 
 	/**
 	 * Determines whether there is still data remaining to be iterated over.

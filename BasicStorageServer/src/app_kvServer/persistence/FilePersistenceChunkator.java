@@ -14,7 +14,7 @@ import java.util.function.Predicate;
  * This class provides batch access to key-value pairs in a file persistence.
  * Should only be used when the underlying persistence is locked for writing.
  */
-public class FilePersistenceIterator implements KVPersistenceIterator {
+public class FilePersistenceChunkator implements KVPersistenceChunkator {
 
 	/** The maximum chunk size. */
 	public static final int MAX_CHUNK_SIZE = 512 * 1024;
@@ -27,7 +27,7 @@ public class FilePersistenceIterator implements KVPersistenceIterator {
 	 * @param filename The path for the persistence file
 	 * @throws FileNotFoundException If the persistence file cannot be found
 	 */
-	public FilePersistenceIterator(String filename) throws FileNotFoundException {
+	public FilePersistenceChunkator(String filename) throws FileNotFoundException {
 		this.scanner = new Scanner(new File(filename), UTF_8);
 	}
 

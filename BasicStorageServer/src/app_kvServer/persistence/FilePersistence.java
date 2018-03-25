@@ -154,9 +154,9 @@ public class FilePersistence implements KVPersistence {
 	}
 
 	@Override
-	public KVPersistenceIterator iterator() {
+	public KVPersistenceChunkator chunkator() {
 		try {
-			return new FilePersistenceIterator(filename);
+			return new FilePersistenceChunkator(filename);
 		} catch (FileNotFoundException e) {
 			log.error("Persistence file could not be found", e);
 			return null;

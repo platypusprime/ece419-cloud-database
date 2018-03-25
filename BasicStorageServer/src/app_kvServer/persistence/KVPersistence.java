@@ -30,7 +30,7 @@ public interface KVPersistence {
 	 * Retrieves all key-value pairs currently in the storage
 	 * 
 	 * @return Map of key-value pairs
-	 * @deprecated Use {@link #iterator()} instead.
+	 * @deprecated Use {@link #chunkator()} instead.
 	 */
 	@Deprecated
 	public Map<String, String> getAll();
@@ -41,7 +41,7 @@ public interface KVPersistence {
 	 * 
 	 * @return A new iterator
 	 */
-	public KVPersistenceIterator iterator();
+	public KVPersistenceChunkator chunkator();
 
 	/**
 	 * Inserts or updates the given key-value pair in the persistence.
