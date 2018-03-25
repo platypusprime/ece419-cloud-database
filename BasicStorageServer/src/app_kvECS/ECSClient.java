@@ -277,6 +277,9 @@ public class ECSClient implements IECSClient {
 				zkSession.createNode(ZKPathUtil.getMigrationRootZnode(node));
 				zkSession.createNode(ZKPathUtil.getReplicationRootZnode(node));
 
+				// Create nodes for heartbeat message
+				zkSession.createNode(ZKPathUtil.getHeartbeatZnode(node));
+
 			} catch (KeeperException | InterruptedException e) {
 				log.error("Could not create znode with path " + ZKPathUtil.getStatusZnode(node), e);
 			}

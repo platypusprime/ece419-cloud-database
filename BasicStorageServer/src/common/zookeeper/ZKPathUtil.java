@@ -78,12 +78,25 @@ public class ZKPathUtil {
 	/**
 	 * Returns the path for the znode which serves as a parent for all replication
 	 * znodes for this server.
-	 * 
+	 *
 	 * @param server The server associated with this node
 	 * @return The root replication znode path
 	 */
 	public static String getReplicationRootZnode(IECSNode server) {
 		return getZnode(server, "replication");
 	}
+
+	/**
+	 * Returns the path for the znode which serves as a parent for all replication
+	 * znodes for this server.
+	 *
+	 * @param server The server associated with this node
+	 * @return The root replication znode path
+	 */
+	public static String getHeartbeatZnode(IECSNode server) {
+		return getZnode(server, "heartbeat");
+	}
+
+
 
 }
