@@ -193,13 +193,20 @@ public class ZKSession {
 		List<String> children = null;
 		try {
 			children = zookeeper.getChildren(path, watcher);
-		} catch (KeeperException | InterruptedException e) {
-			log.error(String.format("Error while reading child nodes for '%s'", path), e);
+			log.debug("Got " + children.size() + " child(ren) for znode '" + path + "'");
+		} catch (KeeperException e) {
+			if (e.code() == Code.NONODE) {
+				log.warn("Cannot get children; missing znode '" + path + "'");
+			} else {
+				log.error("ZooKeeper error while getting children for '" + path + "'", e);
+			}
+		} catch (InterruptedException e) {
+			log.error("Interrupted while getting children for '" + path + "'", e);
 		}
 
 		return children;
 	}
-	
+
 	/**
 	 * Checks if a znode exists at the given path.
 	 * 
@@ -238,7 +245,7 @@ public class ZKSession {
 
 		Stat stat = zookeeper.exists(path, false);
 		if (stat == null) {
-			log.error("No node found at path: " + path);
+			log.warn("No node found at path: " + path);
 			return null;
 		}
 
@@ -266,6 +273,7 @@ public class ZKSession {
 	 */
 	public List<IECSNode> getMetadataNodeData(Watcher watcher) throws KeeperException, InterruptedException {
 		String metadataString = getNodeData(ZKPathUtil.KV_SERVICE_MD_NODE, watcher);
+		if (metadataString == null) return null;
 		return gson.fromJson(metadataString, IECS_NODE_LIST_TYPE);
 	}
 
@@ -312,7 +320,7 @@ public class ZKSession {
 		if (stat != null) {
 			int version = stat.getVersion();
 			zookeeper.setData(path, data, version);
-			log.debug("Updated znode " + path + " with data " + new String(data));
+			log.debug("Updated znode " + path + " with data \"" + new String(data) + "\"");
 		} else {
 			log.error("znode at " + path + " does not exist; could not update");
 		}

@@ -68,15 +68,15 @@ public class MigrationReceiveTask implements Runnable {
 				String data = null;
 				try {
 					ChangeNotificationWatcher updateNotifier = new ChangeNotificationWatcher(this);
-					log.info("Retrieving data from transfer node " + transferNode);
+					log.debug("Retrieving data from transfer node " + transferNode);
 					data = zkSession.getNodeData(transferNode, updateNotifier);
 					if (data == null || data.isEmpty()) {
-						log.info("Transfer node currently empty; waiting for changes");
+						log.debug("Transfer node currently empty; waiting for changes");
 						this.wait(); // wait until the watcher gets an event
 						data = zkSession.getNodeData(transferNode);
-						log.info("Change detected; retrieved transfer data: " + data);
+						log.debug("Change detected; retrieved transfer data: " + data);
 					} else {
-						log.info("Data present; retrieved transfer data: " + data);
+						log.debug("Data present; retrieved transfer data: " + data);
 						updateNotifier.cancel();
 					}
 
@@ -84,7 +84,7 @@ public class MigrationReceiveTask implements Runnable {
 					finished = processData(data);
 
 					// Write empty data on znode to indicate acknowledgement
-					log.info("Emptying transfer znode");
+					log.debug("Emptying transfer znode: " + transferNode);
 					zkSession.updateNode(transferNode, new byte[0]);
 
 				} catch (KeeperException e) {

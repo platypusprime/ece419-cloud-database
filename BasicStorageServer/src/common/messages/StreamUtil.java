@@ -52,7 +52,7 @@ public class StreamUtil {
 	 *             transmitting the message
 	 */
 	public void sendMessage(OutputStream out, Object msg) throws IOException {
-		String msgStr = gson.toJson(msg) + "\n";
+		String msgStr = gson.toJson(msg, KVMessage.class) + "\n";
 		byte[] msgBytes = msgStr.getBytes(UTF_8);
 
 		out.write(msgBytes, 0, msgBytes.length);
@@ -72,7 +72,7 @@ public class StreamUtil {
 	 *             message bytes
 	 */
 	public String receiveString(InputStream in) throws IOException {
-		log.debug("Waiting for message...");
+		log.trace("Waiting for message...");
 
 		int index = 0;
 		byte[] msgBytes = null, tmp = null;

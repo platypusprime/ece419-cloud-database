@@ -108,6 +108,8 @@ public class KVServiceTopology {
 	 * @param nodes The metadata for the nodes to add
 	 */
 	public void addNodes(Collection<IECSNode> nodes) {
+		if (nodes == null) return;
+		
 		int prevSize = nodeMap.size();
 		for (IECSNode node : nodes) {
 			updateNode(node);
@@ -172,19 +174,24 @@ public class KVServiceTopology {
 	}
 
 	/**
-	 * Identifies the set of immediate successors for the given nodes. It is assumed
-	 * that the given nodes are not currently present in the topology.
+	 * Identifies the set of immediate successors for the given nodes. Results do
+	 * not include the given nodes themselves.
 	 * 
 	 * @param nodes The nodes to find successors for
 	 * @return A set containing the immediate successors for each of the nodes given
 	 */
 	public Set<IECSNode> findSuccessors(Collection<IECSNode> nodes) {
 		Set<IECSNode> successors = new HashSet<>();
+		Set<IECSNode> differenceSet = this.getNodeSet();
+		differenceSet.removeAll(nodes);
+		KVServiceTopology differenceTopology = new KVServiceTopology(differenceSet);
+
 		for (IECSNode node : nodes) {
 			String hash = node.getNodeHashRangeStart();
-			IECSNode successor = findSuccessor(hash);
+			IECSNode successor = differenceTopology.findSuccessor(hash);
 			if (successor != null) successors.add(successor);
 		}
+		
 		return successors;
 	}
 

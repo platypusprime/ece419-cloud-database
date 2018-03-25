@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.Objects;
 
 import org.apache.log4j.Logger;
@@ -94,8 +95,9 @@ public class ClientConnection implements Runnable {
 			// Send metadata update message containing info for the server that is
 			// responsible for this key
 			IECSNode correctServer = server.getServiceConfig().findResponsibleServer(keyHash);
-			log.info("Sending metadata response: " + correctServer);
-			return new MetadataUpdateMessage(correctServer);
+			MetadataUpdateMessage metadataUpdateMessage = new MetadataUpdateMessage(correctServer);
+			log.info("Sending metadata response: " + metadataUpdateMessage);
+			return metadataUpdateMessage;
 		}
 
 		switch (request.getStatus()) {
@@ -168,7 +170,7 @@ public class ClientConnection implements Runnable {
 		String inStr = null;
 		KVMessage request = null;
 		try {
-			log.info("Listening for client messages");
+			log.trace("Listening for client messages");
 			inStr = streamUtil.receiveString(in);
 			// TODO validate message type
 			// String msgType = streamUtil.identifyMessageType(inStr);
@@ -176,8 +178,15 @@ public class ClientConnection implements Runnable {
 
 		} catch (JsonSyntaxException e) {
 			log.error("Could not deserialize request: " + inStr, e);
+		} catch (SocketException e) {
+			if (e.getMessage().equals("Socket closed")) {
+				log.warn("Socket closed");
+			} else {
+				log.error("Socket exception while receiving request", e);
+			}
+			this.isOpen = false;
 		} catch (IOException e) {
-			log.error("Error! Connection lost!", e);
+			log.error("IOException while receiving request", e);
 			this.isOpen = false;
 		}
 

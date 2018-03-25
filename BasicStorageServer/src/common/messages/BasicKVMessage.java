@@ -44,7 +44,7 @@ public class BasicKVMessage implements KVMessage {
 		StringBuilder msgBuilder = new StringBuilder("BasicKVMessage{ ")
 				.append("status=\"").append(status == null ? "null" : status.name()).append("\" ")
 				.append("key=\"").append(key == null ? "null" : key).append("\" ")
-				.append("value=\"").append(value == null ? "null" : value).append("\" ");
+				.append("value=\"").append(value == null ? "null" : value).append("\" }");
 
 		return msgBuilder.toString();
 	}

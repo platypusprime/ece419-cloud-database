@@ -50,7 +50,7 @@ public class ECSClient implements IECSClient {
 
 	/** The amount of time to wait for a node to start up. */
 	private static final int NODE_STARTUP_TIMEOUT = 15 * 1000;
-	
+
 	/** The amount of time to wait for node removal. */
 	private static final int SERVICE_RESIZE_TIMEOUT = 30 * 1000;
 
@@ -159,6 +159,7 @@ public class ECSClient implements IECSClient {
 
 		try {
 			zkSession.updateMetadataNode(topology);
+			log.info("Updated metadata node");
 		} catch (KeeperException | InterruptedException e) {
 			log.error("Could not update metadata znode data", e);
 		}
@@ -167,13 +168,15 @@ public class ECSClient implements IECSClient {
 
 		// start up each server process using SSH commands
 		for (IECSNode node : newNodes) {
+			log.info("Initializing server: " + node);
 			try {
 				serverInitializer.initializeServer(node);
+
 			} catch (ServerInitializationException e) {
-				log.warn("Could not initialize server", e);
+				log.warn("Could not initialize server: " + node, e);
 			}
 		}
-
+		
 		if (successorNodes.isEmpty()) {
 			for (IECSNode newNode : newNodes) {
 				try {
@@ -185,16 +188,27 @@ public class ECSClient implements IECSClient {
 			}
 		}
 
-		// await server response
+		// await server responses for startup
+		boolean gotStartupResponse = false;
+		try {
+			gotStartupResponse = awaitNodes(newNodes, NODE_STARTUP_TIMEOUT);
+		} catch (Exception e) {
+			log.warn("Exception occured while awaiting response from " + newNodes.size() + " nodes", e);
+		}
+		if (!gotStartupResponse) {
+			log.warn("Did not receive enough responses within " + NODE_STARTUP_TIMEOUT + " ms");
+		}
+
+		// await server responses for migration
 		Set<IECSNode> changedNodes = Stream.concat(newNodes.stream(), successorNodes.stream())
 				.collect(Collectors.toSet());
-		boolean gotResponse = false;
+		boolean gotMigrationResponse = false;
 		try {
-			gotResponse = awaitNodes(changedNodes, NODE_STARTUP_TIMEOUT);
+			gotMigrationResponse = awaitNodes(changedNodes, NODE_STARTUP_TIMEOUT);
 		} catch (Exception e) {
-			log.warn("Exception occured while awaiting response from " + count + " nodes", e);
+			log.warn("Exception occured while awaiting response from " + changedNodes.size() + " nodes", e);
 		}
-		if (!gotResponse) {
+		if (!gotMigrationResponse) {
 			log.warn("Did not receive enough responses within " + NODE_STARTUP_TIMEOUT + " ms");
 		}
 
@@ -217,8 +231,8 @@ public class ECSClient implements IECSClient {
 	public Collection<IECSNode> setupNodes(int count, String cacheStrategy, int cacheSize) {
 		List<IECSNode> availableNodes = new ArrayList<>();
 
-		log.info("Loading " + count + " node(s) with cache strategy \"" + cacheStrategy + "\" and cache size " + cacheSize
-				+ " from config: " + this.configFilename);
+		log.info("Loading " + count + " node(s) with cache strategy \"" + cacheStrategy + "\" and cache size "
+				+ cacheSize + " from config: " + this.configFilename);
 
 		try (FileReader fileReader = new FileReader(this.configFilename);
 				BufferedReader bufferedReader = new BufferedReader(fileReader)) {

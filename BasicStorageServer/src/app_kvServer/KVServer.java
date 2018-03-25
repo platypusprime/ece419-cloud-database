@@ -15,6 +15,7 @@ import java.net.SocketTimeoutException;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -258,7 +259,7 @@ public class KVServer implements IKVServer, Runnable {
 		// main accept loop
 		while (!serverSocket.isClosed()) {
 			try {
-				log.debug("Listening for client connections...");
+				log.trace("Listening for client connections...");
 				Socket clientSocket = serverSocket.accept();
 				ClientConnection connection = new ClientConnection(clientSocket, this);
 				clients.add(connection);
@@ -269,9 +270,11 @@ public class KVServer implements IKVServer, Runnable {
 						+ " on port " + clientSocket.getPort());
 
 			} catch (SocketTimeoutException e) {
-				log.debug("Accept timed out");
+				log.trace("Accept timed out");
 			} catch (IOException e) {
-				log.error("Error! " + "Unable to establish connection", e);
+				if (!serverSocket.isClosed()) {
+					log.error("Error! " + "Unable to establish connection", e);
+				}
 			}
 		}
 
@@ -343,16 +346,33 @@ public class KVServer implements IKVServer, Runnable {
 		}
 
 		if (childNodes.size() != 1) {
-			log.warn("Unexpected number of migration znode children: " + childNodes.size());
+			// it's possible that some nodes are leftover from a prior crash
+			if (childNodes.contains("ecs")) {
+				for (String childNode : childNodes) {
+					try {
+						zkSession.deleteNode(migrationRootZnode + "/" + childNode);
+					} catch (KeeperException | InterruptedException e) {
+						log.warn("Could not delete extra nodes", e);
+					}
+				}
+				childNodes = Arrays.asList("ecs");
+			} else {
+				log.warn("Unexpected number of children for znode " + migrationRootZnode + ": " + childNodes);
+			}
 			return;
 		}
 
 		// Receive migrated data from other servers
-		String transferNode = migrationRootZnode + childNodes.get(0);
+		String transferNode = migrationRootZnode + "/" + childNodes.get(0);
 		MigrationReceiveTask initialMigrationTask = new MigrationReceiveTask(transferNode, zkSession, this);
 		initialMigrationTask.run();
 	}
 
+	@Override
+	public String getName() {
+		return name;
+	}
+	
 	@Override
 	public int getPort() {
 		return port;
@@ -412,11 +432,7 @@ public class KVServer implements IKVServer, Runnable {
 	public synchronized String getKV(String key) throws Exception {
 		return Optional.ofNullable(cache)
 				.map(cm -> cm.get(key))
-				.orElseGet(() -> {
-					String value = persistence.get(key);
-					cache.put(key, value);
-					return value;
-				});
+				.orElseGet(() -> persistence.get(key));
 	}
 
 	@Override
@@ -458,22 +474,26 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public void start() {
+		log.info("Opening server " + name + " to requests");
 		status = isWriteLocked ? ServerStatus.WRITE_LOCKED : ServerStatus.RUNNING;
 	}
 
 	@Override
 	public void stop() {
+		log.info("Stopping server " + name + " for requests");
 		status = ServerStatus.STOPPED;
 	}
 
 	@Override
 	public void lockWrite() {
+		log.info("Locking server " + name + " for writes");
 		isWriteLocked = true;
 		status = status == ServerStatus.STOPPED ? status : ServerStatus.WRITE_LOCKED;
 	}
 
 	@Override
 	public void unlockWrite() {
+		log.info("Unlocking server " + name + " for writes");
 		isWriteLocked = false;
 		status = status == ServerStatus.STOPPED ? status : ServerStatus.RUNNING;
 	}
@@ -490,6 +510,7 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public boolean moveData(String[] hashRange, String targetName) {
+		log.info("Moving data in range " + hashRange + " from " + this.name + " to " + targetName);
 		String targetNode;
 		try {
 			targetNode = zkSession.createMigrationZnode(this.name, targetName);
