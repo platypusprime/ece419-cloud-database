@@ -13,8 +13,6 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -352,11 +350,20 @@ public class ECSClient implements IECSClient {
 		return true;
 	}
 
-	public boolean awaitNodes(Collection<IECSNode> nodes, int timeout) throws InterruptedException {
-		// Create copy in order to not modify the original one
-		Collection<IECSNode> awaitedNodes = new HashSet<>(nodes);
-
-		int count = awaitedNodes.size();
+	/**
+	 * Waits for responses for the given nodes. This is done by polling their
+	 * individual status znodes. Once a response is received, it is cleared so that
+	 * future responses can be received.
+	 * 
+	 * @param awaitedNodes The nodes to await responses from
+	 * @param timeout The maximum amount of time to wait, in milliseconds
+	 * @return <code>true</code> if all expected responses were received before the
+	 *         timeout, <code>false</code> otherwise
+	 * @throws InterruptedException If the calling thread is interrupted while
+	 *             waiting for responses
+	 */
+	public boolean awaitNodes(Collection<IECSNode> awaitedNodes, int timeout) throws InterruptedException {
+		final int target = awaitedNodes.size();
 		AtomicInteger numResponses = new AtomicInteger(0);
 
 		// Log info message
@@ -364,32 +371,29 @@ public class ECSClient implements IECSClient {
 		awaitedNodes.forEach(n -> infoMessage.append(n.getNodeName()).append(" "));
 		log.info(infoMessage.toString());
 
-		// TODO improve parallelism (maybe with watches?)
-		Thread awaitThread = new Thread(() -> {
-			// poll nodes for status
-			while (awaitedNodes.size() > 0 && numResponses.get() < count) {
-				Iterator<IECSNode> it = awaitedNodes.iterator();
-				while (it.hasNext()) {
-					IECSNode node = it.next();
-					String ecsNodePath = ZKPathUtil.getStatusZnode(node);
-					try {
-						String data = zkSession.getNodeData(ecsNodePath);
-						if (Objects.equals(data, FINISHED)) {
-							numResponses.incrementAndGet();
-							log.info("Received response from node " + node.getNodeName());
-							zkSession.updateNode(ecsNodePath, new byte[0]);
-							it.remove();
-						}
-					} catch (KeeperException | InterruptedException e) {
-						log.warn("Exception while reading server-ECS node", e);
+		synchronized (numResponses) {
+			// check each node and leave a watch
+			for (IECSNode awaitedNode : awaitedNodes) {
+				try {
+					String statusZnode = ZKPathUtil.getStatusZnode(awaitedNode);
+					IncrementWatcher watcher = new IncrementWatcher(statusZnode, zkSession, numResponses, target);
+					String status = zkSession.getNodeData(statusZnode, watcher);
+					if (Objects.equals(status, FINISHED)) {
+						watcher.cancel();
+						zkSession.updateNode(statusZnode, new byte[0]);
+						numResponses.incrementAndGet();
 					}
+				} catch (KeeperException | InterruptedException e) {
+					log.warn("Exception while reading server-ECS node", e);
 				}
 			}
-		});
-		awaitThread.start();
-		awaitThread.join(timeout);
 
-		return numResponses.get() >= count;
+			if (numResponses.get() < target) {
+				numResponses.wait(timeout);
+			}
+		}
+
+		return numResponses.get() >= target;
 	}
 
 	@Override
