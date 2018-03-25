@@ -219,6 +219,25 @@ public class ZKSession {
 	}
 
 	/**
+	 * Determines whether a given server is alive by checking its migration root
+	 * znode for existence. In the case of a crash, the migration root znode is
+	 * deleted by the ECS.
+	 * 
+	 * @param server The server to check
+	 * @return <code>true</code> if the server's migration root znode exists,
+	 *         <code>false</code> otherwise
+	 */
+	public boolean checkServerAlive(IECSNode server) {
+		String migrationRootZnode = ZKPathUtil.getMigrationRootZnode(server);
+		try {
+			return zookeeper.exists(migrationRootZnode, null) != null;
+		} catch (KeeperException | InterruptedException e) {
+			log.warn("Exception while checking existence for transfer znode: " + migrationRootZnode);
+			return false;
+		}
+	}
+
+	/**
 	 * Retrieves the data contained in the specified znode.
 	 * 
 	 * @param path The path of the znode to read

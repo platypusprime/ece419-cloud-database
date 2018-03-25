@@ -188,15 +188,21 @@ public class ServiceTopologyWatcher implements Watcher {
 	 */
 	private void handlePredecessorsRemoved(Collection<IECSNode> transferrers) {
 		IECSNode config = server.getServerConfig();
-		log.info(transferrers.size() + " nodes removed directly pre1ceding " + config.getNodeName() + ";"
+		log.info(transferrers.size() + " nodes removed directly preceding " + config.getNodeName() + ";"
 				+ " accepting key-value pairs from former predecessors");
 
 		server.lockWrite();
 
-		// TODO handle case where node is deleted due to failure
-
 		List<Thread> transferThreads = new ArrayList<>();
 		for (IECSNode transferrer : transferrers) {
+			// check whether the transferrer has crashed
+			boolean isTransferrerAlive = zkSession.checkServerAlive(config);
+			if (!isTransferrerAlive) {
+				log.info("Transferrer " + transferrer.getNodeName() + " has crashed; skipping migration");
+				// TODO transfer data from replica if possible
+				continue;
+			}
+
 			String transferNode = ZKPathUtil.getMigrationZnode(config, transferrer);
 			MigrationReceiveTask receiveTask = new MigrationReceiveTask(transferNode, zkSession, server);
 			Thread transferThread = new Thread(receiveTask);
