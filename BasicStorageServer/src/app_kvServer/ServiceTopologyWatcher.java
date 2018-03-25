@@ -3,10 +3,11 @@ package app_kvServer;
 import static common.zookeeper.ZKSession.FINISHED;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.KeeperException;
@@ -30,7 +31,7 @@ public class ServiceTopologyWatcher implements Watcher {
 	private final KVServer server;
 	private final ZKSession zkSession;
 
-	private boolean isCancelled = false;
+	private AtomicBoolean isCancelled = new AtomicBoolean(false);
 
 	/**
 	 * Instantiates a service configuration change watcher for the specified server.
@@ -50,86 +51,55 @@ public class ServiceTopologyWatcher implements Watcher {
 	 * watches that this class perpetuates.
 	 */
 	public void cancel() {
-		this.isCancelled = true;
-	}
-
-	/**
-	 * Returns the cancellation status of this watcher.
-	 * 
-	 * @return <code>true</code> if this watcher's callback has been cancelled,
-	 *         <code>false</code> otherwise
-	 */
-	public boolean isCancelled() {
-		return this.isCancelled;
+		this.isCancelled.set(true);
+		;
 	}
 
 	@Override
 	public void process(WatchedEvent event) {
-		if (isCancelled) return;
+		if (isCancelled.get()) return;
+
+		String serverName = server.getServerConfig().getNodeName();
+		log.debug("Service topology watcher for server " + serverName + " triggered");
 
 		IECSNode config = server.getServerConfig();
-		String hash = config.getNodeHashRangeStart();
-		KVServiceTopology existingTopology = server.getServiceConfig();
-		Set<IECSNode> existingMetadata = existingTopology.getNodeSet();
-		Set<IECSNode> updatedMetadata = retrieveAndWatchMetadata();
-		KVServiceTopology updatedTopology = new KVServiceTopology(updatedMetadata);
-
-		if (updatedMetadata == null) return;
+		KVServiceTopology oldTopology = server.getServiceConfig();
+		Set<IECSNode> oldMetadata = oldTopology.getNodeSet();
+		log.trace("Old topology for server " + serverName + ": " + oldMetadata);
+		Set<IECSNode> newMetadata = retrieveAndWatchMetadata(); // next watcher set here
+		log.trace("New topology for server " + serverName + ": " + newMetadata);
 
 		// All servers have been removed, nowhere to move data to. Thus, shutdown
-		if (updatedMetadata.isEmpty()) {
+		if (newMetadata == null || newMetadata.isEmpty()) {
+			cancel();
 			handleAllNodesRemoved();
 			return;
 		}
 
-		// Newly removed nodes
-		// (i.e. nodes that are in existing topology but not in updated topology)
-		Set<IECSNode> removedNodes = new HashSet<>(existingMetadata.stream()
-				.filter(node -> !updatedMetadata.contains(node))
-				.collect(Collectors.toSet()));
+		server.setServiceConfig(newMetadata);
+		KVServiceTopology newTopology = server.getServiceConfig();
 
-		// Check whether self is included among removed nodes
-		if (removedNodes.contains(config)) {
-			server.setServiceConfig(updatedMetadata);
-			handleSelfRemoved();
-			return;
-		}
+		TopologyChange change = new TopologyChange(oldMetadata, newMetadata);
 
-		// Check whether predecessors have been deleted
-		// (i.e. should accept transfer from those nodes)
-		List<IECSNode> removedPredecessors = new ArrayList<>();
-		IECSNode currentOldPredecessor = existingTopology.findPredecessor(hash);
-		while (removedNodes.contains(currentOldPredecessor)) {
-			removedPredecessors.add(currentOldPredecessor);
-			currentOldPredecessor = existingTopology.findPredecessor(currentOldPredecessor.getNodeHashRangeStart());
-		}
+		if (change.delta == 0) {
+			log.warn("No topology change detected");
 
-		if (!removedPredecessors.isEmpty()) {
-			server.setServiceConfig(updatedMetadata);
-			handlePredecessorsRemoved(removedPredecessors);
-			return; // assume any given topology change is strictly an add or remove
-		}
+		} else if (change.delta < 0) {
+			if (change.diffContains(config)) {
+				handleSelfRemoved();
+				return;
+			}
 
-		// Set the server's copy of the metadata to the updated one
-		server.setServiceConfig(updatedMetadata);
+			Collection<IECSNode> transferrers = change.getChangedPredecessors(newTopology, config);
+			if (!transferrers.isEmpty()) {
+				handlePredecessorsRemoved(transferrers);
+			}
 
-		// Find newly added nodes.
-		// (i.e. nodes that are in updated topology but not in existing topology)
-		Set<IECSNode> addedNodes = new HashSet<>(updatedMetadata.stream()
-				.filter(node -> !existingMetadata.contains(node))
-				.collect(Collectors.toSet()));
-
-		// Check whether direct predecessors are included among new nodes
-		// (i.e. should transfer some portion of keys to those nodes)
-		List<IECSNode> addedPredecessors = new ArrayList<>();
-		IECSNode currentNewPredecessor = updatedTopology.findPredecessor(hash);
-		while (addedNodes.contains(currentNewPredecessor)) {
-			addedPredecessors.add(currentNewPredecessor);
-			currentNewPredecessor = updatedTopology.findPredecessor(currentNewPredecessor.getNodeHashRangeStart());
-		}
-
-		if (!addedPredecessors.isEmpty()) {
-			handlePredecessorsAdded(addedPredecessors);
+		} else {
+			Collection<IECSNode> receivers = change.getChangedPredecessors(oldTopology, config);
+			if (!receivers.isEmpty()) {
+				handlePredecessorsAdded(receivers);
+			}
 		}
 	}
 
@@ -146,6 +116,9 @@ public class ServiceTopologyWatcher implements Watcher {
 		} catch (KeeperException | InterruptedException e) {
 			// TODO handle case where the next watcher has not been placed properly
 			log.error("Could not retrieve updated metadata", e);
+			return null;
+		} catch (NullPointerException e) {
+			// logging handled by caller
 			return null;
 		}
 	}
@@ -166,7 +139,7 @@ public class ServiceTopologyWatcher implements Watcher {
 		} catch (KeeperException | InterruptedException e) {
 			log.warn("Could not signal shutdown to ECS", e);
 		}
-		
+
 		server.close();
 	}
 
@@ -176,6 +149,8 @@ public class ServiceTopologyWatcher implements Watcher {
 	 * its keys to its immediate successor.
 	 */
 	private void handleSelfRemoved() {
+		this.cancel();
+
 		IECSNode config = server.getServerConfig();
 		KVServiceTopology topology = server.getServiceConfig();
 		log.info(config.getNodeName() + " no longer in service topology;"
@@ -187,7 +162,7 @@ public class ServiceTopologyWatcher implements Watcher {
 		server.moveData(config.getNodeHashRange(), successor.getNodeName());
 
 		try {
-			// Notify ECS with about transfer completion
+			// Notify ECS of transfer completion
 			zkSession.updateNode(ZKPathUtil.getStatusZnode(config), FINISHED);
 		} catch (KeeperException | InterruptedException e) {
 			log.warn("Could not signal transfer completion to ECS", e);
@@ -203,14 +178,15 @@ public class ServiceTopologyWatcher implements Watcher {
 	 * each removed server.
 	 * 
 	 * @param transferrers The predecessors from which K/V pairs are expected
+	 * @see MigrationReceiveTask
 	 */
-	private void handlePredecessorsRemoved(List<IECSNode> transferrers) {
+	private void handlePredecessorsRemoved(Collection<IECSNode> transferrers) {
 		IECSNode config = server.getServerConfig();
 		log.info(transferrers.size() + " nodes removed directly pre1ceding " + config.getNodeName() + ";"
 				+ " accepting key-value pairs from former predecessors");
 
 		server.lockWrite();
-		
+
 		List<Thread> transferThreads = new ArrayList<>();
 		for (IECSNode transferrer : transferrers) {
 			String transferNode = ZKPathUtil.getMigrationZnode(config, transferrer);
@@ -239,8 +215,9 @@ public class ServiceTopologyWatcher implements Watcher {
 	 * server.
 	 * 
 	 * @param receivers The predecessors to transfer K/V pairs to
+	 * @see KVServer#moveData(String[], String)
 	 */
-	private void handlePredecessorsAdded(List<IECSNode> receivers) {
+	private void handlePredecessorsAdded(Collection<IECSNode> receivers) {
 		IECSNode config = server.getServerConfig();
 		log.info(receivers.size() + " nodes added directly preceding " + config.getNodeName() + ";"
 				+ " transferring key-value pairs to new predecessors");
@@ -253,7 +230,7 @@ public class ServiceTopologyWatcher implements Watcher {
 		server.unlockWrite();
 
 		try {
-			// Notify ECS with about transfer completion
+			// Notify ECS of transfer completion
 			zkSession.updateNode(ZKPathUtil.getStatusZnode(config), FINISHED);
 		} catch (KeeperException | InterruptedException e) {
 			log.warn("Could not signal transfer completion to ECS", e);
