@@ -73,8 +73,7 @@ public class ECSClient implements IECSClient {
 	 * @param zkPort The port number used by the ZooKeeper service
 	 */
 	public ECSClient(String zkHostname, int zkPort) {
-//		this(ECS_CONFIG_FILENAME, new ZKSession(zkHostname, zkPort), new SshServerInitializer(zkHostname, zkPort));
-		this(ECS_CONFIG_FILENAME, new ZKSession(zkHostname, zkPort), new LocalServerInitializer(zkHostname, zkPort));
+		this(ECS_CONFIG_FILENAME, new ZKSession(zkHostname, zkPort), new SshServerInitializer(zkHostname, zkPort));
 	}
 
 	/**
