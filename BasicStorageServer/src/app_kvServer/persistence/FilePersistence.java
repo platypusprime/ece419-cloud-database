@@ -290,6 +290,9 @@ public class FilePersistence implements KVPersistence {
 				}
 			}
 
+			sourceChannel.truncate(0);
+			r.seek(0);
+			targetChannel.position(0);
 			sourceChannel.transferFrom(targetChannel, 0, rtemp.length());
 
 		} catch (IOException e) {

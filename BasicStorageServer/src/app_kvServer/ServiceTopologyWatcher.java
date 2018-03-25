@@ -86,19 +86,25 @@ public class ServiceTopologyWatcher implements Watcher {
 
 		} else if (change.delta < 0) {
 			if (change.diffContains(config)) {
-				handleSelfRemoved();
+				new Thread(() -> {
+					handleSelfRemoved();
+				}).start();
 				return;
 			}
 
-			Collection<IECSNode> transferrers = change.getChangedPredecessors(newTopology, config);
+			Collection<IECSNode> transferrers = change.getChangedPredecessors(oldTopology, config);
 			if (!transferrers.isEmpty()) {
-				handlePredecessorsRemoved(transferrers);
+				new Thread(() -> {
+					handlePredecessorsRemoved(transferrers);
+				}).start();
 			}
 
 		} else {
-			Collection<IECSNode> receivers = change.getChangedPredecessors(oldTopology, config);
+			Collection<IECSNode> receivers = change.getChangedPredecessors(newTopology, config);
 			if (!receivers.isEmpty()) {
-				handlePredecessorsAdded(receivers);
+				new Thread(() -> {
+					handlePredecessorsAdded(receivers);
+				}).start();
 			}
 		}
 	}
