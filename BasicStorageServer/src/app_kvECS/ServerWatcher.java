@@ -85,7 +85,7 @@ public class ServerWatcher implements Runnable {
 
 		// Since migration znode is missing, successor will know not to try and
 		// communicate with the crashed node for migration.
-		ecsClient.removeNodes(Arrays.asList(server.getNodeName()));
+		ecsClient.removeNodes(Arrays.asList(server.getNodeName()), server);
 
 		// Replace the crashed node with a new one. Usually, this will be the same one
 		// that crashed. This will start a new heartbeat listener.
