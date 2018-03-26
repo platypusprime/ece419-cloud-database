@@ -1,6 +1,5 @@
 package app_kvECS;
 
-import static app_kvECS.ECSAdminConsole.CONSOLE_PATTERN;
 import static common.zookeeper.ZKPathUtil.KV_SERVICE_LOGGING_NODE;
 import static common.zookeeper.ZKPathUtil.KV_SERVICE_MD_NODE;
 import static common.zookeeper.ZKPathUtil.KV_SERVICE_STATUS_NODE;
@@ -37,7 +36,6 @@ import common.zookeeper.ZKPathUtil;
 import common.zookeeper.ZKSession;
 import ecs.ECSNode;
 import ecs.IECSNode;
-import logger.LogSetup;
 
 /**
  * Implementation of {@link IECSClient}, which manages the server configurations
@@ -434,41 +432,13 @@ public class ECSClient implements IECSClient {
 	}
 
 	/**
-	 * Initializes the ESC with the ZooKeeper service specified in the command line
-	 * arguments and launches the KV Service admin console.
+	 * The entry point for the ECS user application.
 	 * 
-	 * @param args Expects 2 arguments, with the first being the hostname of the
-	 *            ZooKeeper service and the second being the port number of the
-	 *            ZooKeeper service
+	 * @param args hostname, port number
+	 * @see ECSAdminConsole#fromArgs(String[])
 	 */
 	public static void main(String[] args) {
-		String zkHostname;
-		int zkPort;
-
-		// read command-line arguments
-		if (args.length != 2) {
-			System.out.println("Error! Invalid number of arguments!");
-			System.out.println("Usage: m2-server <zkHostname> <zkPort>");
-			System.exit(1);
-		}
-		zkHostname = args[0];
-		if (!args[1].matches("\\d+")) {
-			System.out.println("<zkPort> is not an integer");
-			System.exit(1);
-		}
-		zkPort = Integer.parseInt(args[1]);
-
-		// initialize logging
-		try {
-			LogSetup.initialize("logs/ecs.log", Level.INFO, CONSOLE_PATTERN);
-		} catch (IOException e) {
-			System.out.println("ERROR: unable to initialize logger");
-			e.printStackTrace();
-			System.exit(1);
-		}
-
-		ECSClient ecsClient = new ECSClient(zkHostname, zkPort);
-		ECSAdminConsole ecsConsole = new ECSAdminConsole(ecsClient);
+		ECSAdminConsole ecsConsole = ECSAdminConsole.fromArgs(args);
 		ecsConsole.run();
 	}
 

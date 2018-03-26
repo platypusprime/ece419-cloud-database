@@ -5,7 +5,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Arrays;
 
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+
+import logger.LogSetup;
 
 /**
  * Provides a command-line interface for the K/V service's external
@@ -16,20 +19,59 @@ public class ECSAdminConsole implements Runnable {
 	private static final Logger log = Logger.getLogger(ECSAdminConsole.class);
 
 	/** The command-line prompt, prepended to all lines. */
-	public static final String PROMPT = "kvECS> ";
+	private static final String PROMPT = "kvECS> ";
 
 	/** The Log4J appender pattern for the console appender. */
-	public static final String CONSOLE_PATTERN = PROMPT + "%m%n";
+	private static final String CONSOLE_PATTERN = PROMPT + "%m%n";
 
 	/** The ECS client which performs all ECS functionality. */
 	private final ECSClient ecsClient;
+
+	/**
+	 * Initializes the ESC with the ZooKeeper service specified in the command line
+	 * arguments and launches the KV Service admin console.
+	 * 
+	 * @param args Command line arguments. Expects the first to be the hostname of
+	 *            the ZooKeeper service and the second to be the port number of the
+	 *            ZooKeeper service.
+	 * @return The newly created ECS admin console
+	 */
+	public static ECSAdminConsole fromArgs(String[] args) {
+		String zkHostname;
+		int zkPort;
+
+		// read command-line arguments
+		if (args.length != 2) {
+			System.out.println("Error! Invalid number of arguments!");
+			System.out.println("Usage: m2-server <zkHostname> <zkPort>");
+			System.exit(1);
+		}
+		zkHostname = args[0];
+		if (!args[1].matches("\\d+")) {
+			System.out.println("<zkPort> is not an integer");
+			System.exit(1);
+		}
+		zkPort = Integer.parseInt(args[1]);
+
+		// initialize logging
+		try {
+			LogSetup.initialize("logs/ecs.log", Level.INFO, CONSOLE_PATTERN);
+		} catch (IOException e) {
+			System.out.println("ERROR: unable to initialize logger");
+			e.printStackTrace();
+			System.exit(1);
+		}
+
+		ECSClient ecsClient = new ECSClient(zkHostname, zkPort);
+		return new ECSAdminConsole(ecsClient);
+	}
 
 	/**
 	 * Creates a command-line wrapper for the given ECS client.
 	 * 
 	 * @param ecsClient The client to wrap
 	 */
-	public ECSAdminConsole(ECSClient ecsClient) {
+	private ECSAdminConsole(ECSClient ecsClient) {
 		this.ecsClient = ecsClient;
 	}
 
