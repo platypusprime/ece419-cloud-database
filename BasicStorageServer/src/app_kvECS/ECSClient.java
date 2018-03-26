@@ -4,19 +4,18 @@ import static app_kvECS.ECSAdminConsole.CONSOLE_PATTERN;
 import static common.zookeeper.ZKSession.FINISHED;
 import static common.zookeeper.ZKSession.RUNNING_STATUS;
 import static common.zookeeper.ZKSession.STOPPED_STATUS;
-import static java.nio.charset.StandardCharsets.UTF_8;
+import static common.zookeeper.ZKSession.UTF_8;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -64,9 +63,8 @@ public class ECSClient implements IECSClient {
 	/** The ECS's internal representation of the service topology. */
 	private KVServiceTopology topology = new KVServiceTopology();
 
-	/** Heartbeat listening threads map. */
-	private final Map<String, Thread> heartbeatThreads;
-
+	/** heartbeatWatcher thread */
+	private ServerWatcher heartbeatWatcher;
 	/**
 	 * Initializes an ECS service and connects it to the specified
 	 * ZooKeeper service using the default wrapper.
@@ -75,7 +73,8 @@ public class ECSClient implements IECSClient {
 	 * @param zkPort The port number used by the ZooKeeper service
 	 */
 	public ECSClient(String zkHostname, int zkPort) {
-		this(ECS_CONFIG_FILENAME, new ZKSession(zkHostname, zkPort), new SshServerInitializer(zkHostname, zkPort));
+//		this(ECS_CONFIG_FILENAME, new ZKSession(zkHostname, zkPort), new SshServerInitializer(zkHostname, zkPort));
+		this(ECS_CONFIG_FILENAME, new ZKSession(zkHostname, zkPort), new LocalServerInitializer(zkHostname, zkPort));
 	}
 
 	/**
@@ -91,14 +90,14 @@ public class ECSClient implements IECSClient {
 		this.zkSession = zkSession;
 		this.serverInitializer = serverInitializer;
 		this.configFilename = configFilename;
-		this.heartbeatThreads = new HashMap<>();
 
 		try {
 			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_MD_NODE);
 			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
 			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_LOGGING_NODE, Level.ERROR.toString().getBytes(UTF_8));
+			this.heartbeatWatcher = new ServerWatcher(this.zkSession, this);
 
-		} catch (KeeperException | InterruptedException e) {
+		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
 			log.error("Exception while creating global znodes", e);
 		}
 
@@ -108,9 +107,11 @@ public class ECSClient implements IECSClient {
 	public boolean start() {
 		log.info("Starting all servers in the KV store service");
 		try {
+			Thread heartbeatThread = new Thread(heartbeatWatcher);
+			heartbeatThread.start();
 			zkSession.updateNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, RUNNING_STATUS.getBytes(UTF_8));
 			return true;
-		} catch (KeeperException | InterruptedException e) {
+		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
 			log.error("Could not update status node", e);
 		}
 		return false;
@@ -122,7 +123,7 @@ public class ECSClient implements IECSClient {
 		try {
 			zkSession.updateNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
 			return true;
-		} catch (KeeperException | InterruptedException e) {
+		} catch (KeeperException | InterruptedException | UnsupportedEncodingException e) {
 			log.error("Could not update status node", e);
 		}
 		return false;
@@ -136,9 +137,10 @@ public class ECSClient implements IECSClient {
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_MD_NODE);
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_STATUS_NODE);
 			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_LOGGING_NODE);
-
-			heartbeatThreads.values().forEach(Thread::interrupt);
-
+			heartbeatWatcher.stop();
+			while(heartbeatWatcher.getStat()) {
+				continue;
+			}
 			zkSession.close();
 			return true;
 
@@ -149,7 +151,7 @@ public class ECSClient implements IECSClient {
 	}
 
 	@Override
-	public synchronized IECSNode addNode(String cacheStrategy, int cacheSize) {
+	public IECSNode addNode(String cacheStrategy, int cacheSize) {
 		Collection<IECSNode> nodes = addNodes(1, cacheStrategy, cacheSize);
 		if (nodes != null && nodes.size() == 1) {
 			return nodes.iterator().next();
@@ -182,7 +184,7 @@ public class ECSClient implements IECSClient {
 				log.warn("Could not initialize server: " + node, e);
 			}
 		}
-
+		
 		if (successorNodes.isEmpty()) {
 			for (IECSNode newNode : newNodes) {
 				try {
@@ -203,12 +205,6 @@ public class ECSClient implements IECSClient {
 		}
 		if (!gotStartupResponse) {
 			log.warn("Did not receive enough responses within " + NODE_STARTUP_TIMEOUT + " ms");
-		}
-
-		for (IECSNode newNode : newNodes) {
-			Thread t = new Thread(new ServerWatcher(newNode, this, zkSession));
-			heartbeatThreads.put(newNode.getNodeName(), t);
-			t.start();
 		}
 
 		// await server responses for migration
@@ -240,7 +236,7 @@ public class ECSClient implements IECSClient {
 	 *      419 Milestone 2 - External Configuration Service (ECS)</a>
 	 */
 	@Override
-	public synchronized Collection<IECSNode> setupNodes(int count, String cacheStrategy, int cacheSize) {
+	public Collection<IECSNode> setupNodes(int count, String cacheStrategy, int cacheSize) {
 		List<IECSNode> availableNodes = new ArrayList<>();
 
 		log.info("Loading " + count + " node(s) with cache strategy \"" + cacheStrategy + "\" and cache size "
@@ -333,6 +329,12 @@ public class ECSClient implements IECSClient {
 		// nodes
 		Set<IECSNode> changedNodes = Stream.concat(removedNodes.stream(), successorNodes.stream())
 				.collect(Collectors.toSet());
+
+		// remove the failed node if there is any
+		for(IECSNode node:heartbeatWatcher.getFailedNodes()){
+			changedNodes.remove(node);
+		}
+
 		boolean gotResponses = false;
 		try {
 			gotResponses = awaitNodes(changedNodes, SERVICE_RESIZE_TIMEOUT);
@@ -350,17 +352,14 @@ public class ECSClient implements IECSClient {
 				zkSession.deleteNode(ZKPathUtil.getStatusZnode(removedNode));
 				zkSession.deleteNode(ZKPathUtil.getMigrationRootZnode(removedNode));
 				zkSession.deleteNode(ZKPathUtil.getReplicationRootZnode(removedNode));
+				zkSession.deleteNode(ZKPathUtil.getHeartbeatZnode(removedNode));
 			} catch (KeeperException | InterruptedException e) {
 				log.error("Could not delete znode for node " + removedNode, e);
 			}
 		}
 
-		// remove heartbeat listeners for the removed nodes
-		for (String nodeName : nodeNames) {
-			Optional.ofNullable(heartbeatThreads.remove(nodeName)).ifPresent(Thread::interrupt);
-		}
-
 		return true;
+
 	}
 
 	@Override
@@ -380,7 +379,7 @@ public class ECSClient implements IECSClient {
 	 * @throws InterruptedException If the calling thread is interrupted while
 	 *             waiting for responses
 	 */
-	public boolean awaitNodes(Collection<IECSNode> awaitedNodes, int timeout) throws InterruptedException {
+	public synchronized boolean awaitNodes(Collection<IECSNode> awaitedNodes, int timeout) throws InterruptedException {
 		final int target = awaitedNodes.size();
 		AtomicInteger numResponses = new AtomicInteger(0);
 
@@ -427,6 +426,10 @@ public class ECSClient implements IECSClient {
 
 	private IECSNode getNodeByHash(String hash) {
 		return topology.findResponsibleServer(hash);
+	}
+
+	public KVServiceTopology getTopology() {
+		return topology;
 	}
 
 	/**
