@@ -1,10 +1,15 @@
 package app_kvECS;
 
 import static app_kvECS.ECSAdminConsole.CONSOLE_PATTERN;
+import static common.zookeeper.ZKPathUtil.KV_SERVICE_LOGGING_NODE;
+import static common.zookeeper.ZKPathUtil.KV_SERVICE_MD_NODE;
+import static common.zookeeper.ZKPathUtil.KV_SERVICE_STATUS_NODE;
 import static common.zookeeper.ZKSession.FINISHED;
 import static common.zookeeper.ZKSession.RUNNING_STATUS;
 import static common.zookeeper.ZKSession.STOPPED_STATUS;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.zookeeper.CreateMode.EPHEMERAL;
+import static org.apache.zookeeper.CreateMode.PERSISTENT;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -88,18 +93,24 @@ public class ECSClient implements IECSClient {
 	 * @param serverInitializer The initializer responsible for starting up servers
 	 */
 	public ECSClient(String configFilename, ZKSession zkSession, ServerInitializer serverInitializer) {
+		log.info("Initializing ECSClient");
+		
 		this.zkSession = zkSession;
 		this.serverInitializer = serverInitializer;
 		this.configFilename = configFilename;
 		this.heartbeatThreads = new HashMap<>();
 
 		try {
-			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_MD_NODE);
-			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
-			this.zkSession.createNode(ZKPathUtil.KV_SERVICE_LOGGING_NODE, Level.ERROR.toString().getBytes(UTF_8));
+			log.debug("Cleaning up leftover znodes");
+			this.zkSession.deleteNode("/");
+
+			log.debug("Creating ECS znodes");
+			this.zkSession.createNode(KV_SERVICE_MD_NODE, EPHEMERAL);
+			this.zkSession.createNode(KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8), EPHEMERAL);
+			this.zkSession.createNode(KV_SERVICE_LOGGING_NODE, Level.ERROR.toString().getBytes(UTF_8), EPHEMERAL);
 
 		} catch (KeeperException | InterruptedException e) {
-			log.error("Exception while creating global znodes", e);
+			log.error("Exception while setting up ECS znodes", e);
 		}
 
 	}
@@ -108,7 +119,7 @@ public class ECSClient implements IECSClient {
 	public boolean start() {
 		log.info("Starting all servers in the KV store service");
 		try {
-			zkSession.updateNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, RUNNING_STATUS.getBytes(UTF_8));
+			zkSession.updateNode(KV_SERVICE_STATUS_NODE, RUNNING_STATUS.getBytes(UTF_8));
 			return true;
 		} catch (KeeperException | InterruptedException e) {
 			log.error("Could not update status node", e);
@@ -120,7 +131,7 @@ public class ECSClient implements IECSClient {
 	public boolean stop() {
 		log.info("Stopping all servers in the KV store service");
 		try {
-			zkSession.updateNode(ZKPathUtil.KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
+			zkSession.updateNode(KV_SERVICE_STATUS_NODE, STOPPED_STATUS.getBytes(UTF_8));
 			return true;
 		} catch (KeeperException | InterruptedException e) {
 			log.error("Could not update status node", e);
@@ -132,10 +143,10 @@ public class ECSClient implements IECSClient {
 	public boolean shutdown() {
 		log.info("Shutting down all servers in the KV store service");
 		try {
-			// each server is responsible for removing its own ZNodes at this point
-			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_MD_NODE);
-			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_STATUS_NODE);
-			zkSession.deleteNode(ZKPathUtil.KV_SERVICE_LOGGING_NODE);
+			log.debug("Remove ECS znodes");
+			zkSession.deleteNode(KV_SERVICE_MD_NODE);
+			zkSession.deleteNode(KV_SERVICE_STATUS_NODE);
+			zkSession.deleteNode(KV_SERVICE_LOGGING_NODE);
 
 			heartbeatThreads.values().forEach(Thread::interrupt);
 
@@ -160,12 +171,15 @@ public class ECSClient implements IECSClient {
 
 	@Override
 	public synchronized Collection<IECSNode> addNodes(int count, String cacheStrategy, int cacheSize) {
+		log.info("Adding " + count + " node(s) with cache strategy \"" + cacheStrategy + "\""
+				+ " and cache size " + cacheSize);
+
 		Collection<IECSNode> newNodes = setupNodes(count, cacheStrategy, cacheSize);
 		if (newNodes == null) return null;
 
 		try {
+			log.debug("Updating metadata znode");
 			zkSession.updateMetadataNode(topology);
-			log.info("Updated metadata node");
 		} catch (KeeperException | InterruptedException e) {
 			log.error("Could not update metadata znode data", e);
 		}
@@ -183,17 +197,6 @@ public class ECSClient implements IECSClient {
 			}
 		}
 
-		if (successorNodes.isEmpty()) {
-			for (IECSNode newNode : newNodes) {
-				try {
-					String migrationNode = zkSession.createMigrationZnode("ecs", newNode.getNodeName());
-					zkSession.updateNode(migrationNode, FINISHED);
-				} catch (KeeperException | InterruptedException e) {
-					log.error("Could not signal initial migration completion to new nodes");
-				}
-			}
-		}
-
 		// await server responses for startup
 		boolean gotStartupResponse = false;
 		try {
@@ -202,9 +205,13 @@ public class ECSClient implements IECSClient {
 			log.warn("Exception occured while awaiting response from " + newNodes.size() + " nodes", e);
 		}
 		if (!gotStartupResponse) {
-			log.warn("Did not receive enough responses within " + NODE_STARTUP_TIMEOUT + " ms");
+			log.warn("Did not receive enough startup responses within " + NODE_STARTUP_TIMEOUT + " ms");
 		}
 
+		if (gotStartupResponse) {
+			log.info("Got startup responses for startup");
+		}
+		
 		for (IECSNode newNode : newNodes) {
 			Thread t = new Thread(new ServerWatcher(newNode, this, zkSession));
 			heartbeatThreads.put(newNode.getNodeName(), t);
@@ -212,16 +219,18 @@ public class ECSClient implements IECSClient {
 		}
 
 		// await server responses for migration
-		Set<IECSNode> changedNodes = Stream.concat(newNodes.stream(), successorNodes.stream())
-				.collect(Collectors.toSet());
-		boolean gotMigrationResponse = false;
-		try {
-			gotMigrationResponse = awaitNodes(changedNodes, NODE_STARTUP_TIMEOUT);
-		} catch (Exception e) {
-			log.warn("Exception occured while awaiting response from " + changedNodes.size() + " nodes", e);
-		}
-		if (!gotMigrationResponse) {
-			log.warn("Did not receive enough responses within " + NODE_STARTUP_TIMEOUT + " ms");
+		if (!successorNodes.isEmpty()) {
+			Set<IECSNode> changedNodes = Stream.concat(newNodes.stream(), successorNodes.stream())
+					.collect(Collectors.toSet());
+			boolean gotMigrationResponse = false;
+			try {
+				gotMigrationResponse = awaitNodes(changedNodes, SERVICE_RESIZE_TIMEOUT);
+			} catch (Exception e) {
+				log.warn("Exception occured while awaiting response from " + changedNodes.size() + " nodes", e);
+			}
+			if (!gotMigrationResponse) {
+				log.warn("Did not receive enough migration responses within " + SERVICE_RESIZE_TIMEOUT + " ms");
+			}
 		}
 
 		return newNodes;
@@ -241,10 +250,9 @@ public class ECSClient implements IECSClient {
 	 */
 	@Override
 	public synchronized Collection<IECSNode> setupNodes(int count, String cacheStrategy, int cacheSize) {
-		List<IECSNode> availableNodes = new ArrayList<>();
+		log.info("Loading " + count + " node(s) from config: " + this.configFilename);
 
-		log.info("Loading " + count + " node(s) with cache strategy \"" + cacheStrategy + "\" and cache size "
-				+ cacheSize + " from config: " + this.configFilename);
+		List<IECSNode> availableNodes = new ArrayList<>();
 
 		try (FileReader fileReader = new FileReader(this.configFilename);
 				BufferedReader bufferedReader = new BufferedReader(fileReader)) {
@@ -252,7 +260,7 @@ public class ECSClient implements IECSClient {
 			String line;
 			while ((line = bufferedReader.readLine()) != null) {
 				// each line contains information for a single server
-				log.debug("Processing config line: " + line);
+				log.trace("Processing config line: " + line);
 
 				try {
 					// each line is formatted as "<server-name> <hostname> <port>"
@@ -262,7 +270,7 @@ public class ECSClient implements IECSClient {
 					int port = Integer.parseInt(tokens[2]);
 
 					if (topology.containsNodeOfName(name)) {
-						log.debug("ECS already loaded " + name + "; skipping");
+						log.trace("ECS already loaded " + name + "; skipping");
 					} else {
 						IECSNode node = new ECSNode(name, host, port, cacheStrategy, cacheSize);
 						log.debug("Loaded server from config: " + node);
@@ -282,7 +290,7 @@ public class ECSClient implements IECSClient {
 			log.error("I/O exception while reading ECS config", e);
 			return null;
 		}
-		log.info(availableNodes.size() + " machines available from ECS config");
+		log.debug(availableNodes.size() + " available machines remaining from " + this.configFilename);
 
 		if (availableNodes.size() < count) {
 			log.error("Insufficient remaining nodes available in the config for setup");
@@ -290,24 +298,20 @@ public class ECSClient implements IECSClient {
 		}
 
 		Collection<IECSNode> selectedNodes = new ArrayList<>(availableNodes.subList(0, count));
-		log.info("Selected " + count + " nodes from " + availableNodes.size() + " available");
+		log.debug("Selected " + count + " nodes from " + availableNodes.size() + " available");
 
 		// add new nodes to ECS
+		log.debug("Updating ECS topology object");
 		topology.addNodes(selectedNodes);
 		selectedNodes.stream().forEach(node -> {
 			try {
-				// Create a node for communications between the ECS and this node
-				zkSession.createNode(ZKPathUtil.getStatusZnode(node));
-
-				// Create nodes for migrating and replicating data to and from other servers
-				zkSession.createNode(ZKPathUtil.getMigrationRootZnode(node));
-				zkSession.createNode(ZKPathUtil.getReplicationRootZnode(node));
-
-				// Create nodes for heartbeat message
-				zkSession.createNode(ZKPathUtil.getHeartbeatZnode(node));
+				log.debug("Creating znodes for server " + node.getNodeName());
+				zkSession.createNode(ZKPathUtil.getStatusZnode(node), EPHEMERAL);
+				zkSession.createNode(ZKPathUtil.getMigrationRootZnode(node), PERSISTENT);
+				zkSession.createNode(ZKPathUtil.getHeartbeatZnode(node), EPHEMERAL);
 
 			} catch (KeeperException | InterruptedException e) {
-				log.error("Could not create znode with path " + ZKPathUtil.getStatusZnode(node), e);
+				log.warn("Could not create server znode: " + ZKPathUtil.getStatusZnode(node), e);
 			}
 		});
 
@@ -349,7 +353,7 @@ public class ECSClient implements IECSClient {
 			try {
 				zkSession.deleteNode(ZKPathUtil.getStatusZnode(removedNode));
 				zkSession.deleteNode(ZKPathUtil.getMigrationRootZnode(removedNode));
-				zkSession.deleteNode(ZKPathUtil.getReplicationRootZnode(removedNode));
+				zkSession.deleteNode(ZKPathUtil.getHeartbeatZnode(removedNode));
 			} catch (KeeperException | InterruptedException e) {
 				log.error("Could not delete znode for node " + removedNode, e);
 			}

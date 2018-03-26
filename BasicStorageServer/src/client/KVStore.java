@@ -53,7 +53,7 @@ public class KVStore implements KVCommInterface {
 
 				Socket socket = new Socket();
 				socket.connect(server.getNodeSocketAddress());
-				log.info("Connection established with server " + serverName + " at " + server.getNodeSocketAddress());
+				log.debug("Connection established with server " + serverName + " at " + server.getNodeSocketAddress());
 				socketMap.put(serverName, socket);
 			}
 		}

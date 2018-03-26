@@ -118,7 +118,7 @@ public class KVServiceTopology {
 		if (log.isDebugEnabled()) {
 			int numAdded = nodeMap.size() - prevSize;
 			int numUpdated = nodes.size() - numAdded;
-			log.debug("Added " + numAdded + " server(s); updated " + numUpdated + " server(s)");
+			log.trace("Added " + numAdded + " server(s); updated " + numUpdated + " server(s)");
 		}
 	}
 

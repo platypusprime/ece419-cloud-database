@@ -14,7 +14,7 @@ import org.apache.log4j.PatternLayout;
 public class LogSetup {
 
 	/** The pattern string to set for the file appender. */
-	public static final String FILE_PATTERN = "[%d{ISO8601}][%-5p][%t - %c] %m%n";
+	public static final String FILE_PATTERN = "[%d{ISO8601}][%-5p][%t][%c] %m%n";
 
 	/**
 	 * Defeats instantiation.

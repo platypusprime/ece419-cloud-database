@@ -47,12 +47,13 @@ public class MigrationReceiveTask implements Runnable {
 		log.info("Starting migration receive task");
 
 		// wait for the transfer node to be created
-		ChangeNotificationWatcher existenceNotifier = new ChangeNotificationWatcher(this);
-		synchronized (this) {
+		Object existenceMonitor = new Object();
+		ChangeNotificationWatcher existenceNotifier = new ChangeNotificationWatcher(existenceMonitor);
+		synchronized (existenceMonitor) {
 			try {
 				boolean nodeExists = zkSession.checkNodeExists(transferNode, existenceNotifier);
 				while (!nodeExists) {
-					this.wait();
+					existenceMonitor.wait();
 					nodeExists = zkSession.checkNodeExists(transferNode, existenceNotifier);
 				}
 				existenceNotifier.cancel();
@@ -64,15 +65,16 @@ public class MigrationReceiveTask implements Runnable {
 
 		// poll for transfer data
 		while (!finished) {
-			synchronized (this) {
+			String monitor = transferNode;
+			ChangeNotificationWatcher updateNotifier = new ChangeNotificationWatcher(monitor);
+			synchronized (monitor) {
 				String data = null;
 				try {
-					ChangeNotificationWatcher updateNotifier = new ChangeNotificationWatcher(this);
 					log.debug("Retrieving data from transfer node " + transferNode);
 					data = zkSession.getNodeData(transferNode, updateNotifier);
 					if (data == null || data.isEmpty()) {
-						log.debug("Transfer node currently empty; waiting for changes");
-						this.wait(); // wait until the watcher gets an event
+						log.debug("Transfer node currently empty; blocking until change on " + transferNode);
+						monitor.wait(); // wait until the watcher gets an event
 						data = zkSession.getNodeData(transferNode);
 						log.debug("Change detected; retrieved transfer data: " + data);
 					} else {

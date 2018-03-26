@@ -1,6 +1,7 @@
 package testing.common.zookeeper;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.zookeeper.CreateMode.EPHEMERAL;
 import static org.junit.Assert.assertEquals;
 
 import java.net.InetAddress;
@@ -24,7 +25,7 @@ public class ZKWrapperTest {
 	@Test
 	public void testSetGet() throws Exception {
 		ZKSession session = new ZKSession(InetAddress.getLocalHost().getHostName(), 2181);
-		session.createNode("/foo", "bar".getBytes(UTF_8));
+		session.createNode("/foo", "bar".getBytes(UTF_8), EPHEMERAL);
 		assertEquals("bar", session.getNodeData("/foo"));
 		session.deleteNode("/foo");
 		session.close();

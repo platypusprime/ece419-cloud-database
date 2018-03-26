@@ -77,7 +77,6 @@ public class ServerWatcher implements Runnable {
 		try {
 			zkSession.deleteNode(ZKPathUtil.getStatusZnode(server));
 			zkSession.deleteNode(ZKPathUtil.getMigrationRootZnode(server));
-			zkSession.deleteNode(ZKPathUtil.getReplicationRootZnode(server));
 			zkSession.deleteNode(ZKPathUtil.getHeartbeatZnode(server));
 		} catch (KeeperException | InterruptedException e) {
 			log.error("Could not delete znodes for server: " + server.getNodeName(), e);

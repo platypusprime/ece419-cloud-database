@@ -2,10 +2,8 @@ package app_kvServer;
 
 import static common.zookeeper.ZKSession.FINISHED;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -14,7 +12,6 @@ import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 
-import app_kvServer.migration.MigrationReceiveTask;
 import common.KVServiceTopology;
 import common.zookeeper.ZKPathUtil;
 import common.zookeeper.ZKSession;
@@ -52,7 +49,6 @@ public class ServiceTopologyWatcher implements Watcher {
 	 */
 	public void cancel() {
 		this.isCancelled.set(true);
-		;
 	}
 
 	@Override
@@ -71,7 +67,6 @@ public class ServiceTopologyWatcher implements Watcher {
 
 		// All servers have been removed, nowhere to move data to. Thus, shutdown
 		if (newMetadata == null || newMetadata.isEmpty()) {
-			cancel();
 			handleAllNodesRemoved();
 			return;
 		}
@@ -84,22 +79,13 @@ public class ServiceTopologyWatcher implements Watcher {
 		if (change.delta == 0) {
 			log.warn("No topology change detected");
 
-		} else if (change.delta < 0) {
-			if (change.diffContains(config)) {
-				new Thread(() -> {
-					handleSelfRemoved();
-				}).start();
-				return;
-			}
+		} else if (change.delta < 0 && change.diffContains(config)) {
+			new Thread(() -> {
+				handleSelfRemoved();
+			}).start();
+			return;
 
-			Collection<IECSNode> transferrers = change.getChangedPredecessors(oldTopology, config);
-			if (!transferrers.isEmpty()) {
-				new Thread(() -> {
-					handlePredecessorsRemoved(transferrers);
-				}).start();
-			}
-
-		} else {
+		} else if (change.delta > 0) {
 			Collection<IECSNode> receivers = change.getChangedPredecessors(newTopology, config);
 			if (!receivers.isEmpty()) {
 				new Thread(() -> {
@@ -135,6 +121,8 @@ public class ServiceTopologyWatcher implements Watcher {
 	 * data.
 	 */
 	private void handleAllNodesRemoved() {
+		this.cancel();
+		
 		IECSNode config = server.getServerConfig();
 		log.info("No servers remaining in service configuration;"
 				+ " shutting down " + config.getNodeName() + " without any transfer");
@@ -175,51 +163,6 @@ public class ServiceTopologyWatcher implements Watcher {
 		}
 
 		server.close();
-	}
-
-	/**
-	 * Handles the case when server(s) that were previously located directly
-	 * preceding this watcher's associated server are removed from the service
-	 * topology. In this case the associated server must accept key-value pairs from
-	 * each removed server.
-	 * 
-	 * @param transferrers The predecessors from which K/V pairs are expected
-	 * @see MigrationReceiveTask
-	 */
-	private void handlePredecessorsRemoved(Collection<IECSNode> transferrers) {
-		IECSNode config = server.getServerConfig();
-		log.info(transferrers.size() + " nodes removed directly preceding " + config.getNodeName() + ";"
-				+ " accepting key-value pairs from former predecessors");
-
-		server.lockWrite();
-
-		List<Thread> transferThreads = new ArrayList<>();
-		for (IECSNode transferrer : transferrers) {
-			// check whether the transferrer has crashed
-			boolean isTransferrerAlive = zkSession.checkServerAlive(config);
-			if (!isTransferrerAlive) {
-				log.info("Transferrer " + transferrer.getNodeName() + " has crashed; skipping migration");
-				// TODO transfer data from replica if possible
-				continue;
-			}
-
-			String transferNode = ZKPathUtil.getMigrationZnode(config, transferrer);
-			MigrationReceiveTask receiveTask = new MigrationReceiveTask(transferNode, zkSession, server);
-			Thread transferThread = new Thread(receiveTask);
-			transferThread.start();
-			transferThreads.add(transferThread);
-		}
-
-		// block until all transfers have completed
-		for (Thread transferThread : transferThreads) {
-			try {
-				transferThread.join();
-			} catch (InterruptedException e) {
-				log.warn("Interrupted while waiting for transfer", e);
-			}
-		}
-
-		server.unlockWrite();
 	}
 
 	/**

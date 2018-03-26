@@ -3,8 +3,6 @@ package common.zookeeper;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 
-import app_kvServer.migration.MigrationReceiveTask;
-
 /**
  * A watcher that simply sends a notification to an object's monitor when it is
  * triggered. Can be cancelled beforehand.
@@ -19,7 +17,7 @@ public class ChangeNotificationWatcher implements Watcher {
 	 * 
 	 * @param o The object whose monitor is to be notified
 	 */
-	public ChangeNotificationWatcher(MigrationReceiveTask o) {
+	public ChangeNotificationWatcher(Object o) {
 		this.o = o;
 	}
 
@@ -33,10 +31,13 @@ public class ChangeNotificationWatcher implements Watcher {
 
 	@Override
 	public void process(WatchedEvent event) {
+		System.out.println("REEEE" + o.toString());
+
 		if (isCancelled) return;
 
 		synchronized (o) {
 			o.notify();
 		}
 	}
+
 }

@@ -175,6 +175,7 @@ public class ClientConnection implements Runnable {
 			// TODO validate message type
 			// String msgType = streamUtil.identifyMessageType(inStr);
 			request = streamUtil.deserializeKVMessage(inStr);
+			log.info("Server " + server.getName() + " received client request: " + request);
 
 		} catch (JsonSyntaxException e) {
 			log.error("Could not deserialize request: " + inStr, e);

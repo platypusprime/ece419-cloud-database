@@ -58,7 +58,7 @@ public class StreamUtil {
 		out.write(msgBytes, 0, msgBytes.length);
 		out.flush();
 
-		log.info("Sent message: '" + msgStr.trim() + "'");
+		log.trace("Sent message: '" + msgStr.trim() + "'");
 	}
 
 	/**

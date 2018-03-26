@@ -128,7 +128,7 @@ public class ZKSession {
 		connectionLatch.await(ZK_INIT_TIMEOUT, TimeUnit.SECONDS);
 
 		if (zookeeper.getState() == ZooKeeper.States.CONNECTED) {
-			log.info("Connection to ZooKeeper service successful");
+			log.debug("Connection to ZooKeeper service at " + connectStr + " successful");
 			this.zookeeper = zookeeper;
 		}
 	}
@@ -149,11 +149,12 @@ public class ZKSession {
 	 * Crates an empty znode at the specified path.
 	 * 
 	 * @param path The path of the znode to create
+	 * @param createMode The znode's createMode
 	 * @throws KeeperException If the ZooKeeper server signals an error
 	 * @throws InterruptedException If the transaction is interrupted
 	 */
-	public void createNode(String path) throws KeeperException, InterruptedException {
-		createNode(path, new byte[0]);
+	public void createNode(String path, CreateMode createMode) throws KeeperException, InterruptedException {
+		createNode(path, new byte[0], createMode);
 	}
 
 	/**
@@ -161,22 +162,27 @@ public class ZKSession {
 	 * 
 	 * @param path The path of the znode to create
 	 * @param data The data to initialize the znode to
+	 * @param createMode The znode's createMode
 	 * @throws KeeperException If the ZooKeeper server signals an error
 	 * @throws InterruptedException If the transaction is interrupted
 	 */
-	public void createNode(String path, byte[] data) throws KeeperException, InterruptedException {
+	public void createNode(String path, byte[] data, CreateMode createMode)
+			throws KeeperException, InterruptedException {
 		// TODO do a better job with ACLs
 		try {
-			zookeeper.create(path, data, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+			zookeeper.create(path, data, ZooDefs.Ids.OPEN_ACL_UNSAFE, createMode);
+			log.trace("Created " + createMode + " znode: " + path + " with data "
+					+ "\"" + new String(data, UTF_8) + "\"");
+
 		} catch (KeeperException e) {
 			if (e.code() == Code.NODEEXISTS) {
-				log.debug("znode " + path + " already exists; updating existing node with data \"" + new String(data) + "\"");
+				log.warn("znode " + path + " already exists; updating existing node with data "
+						+ "\"" + new String(data, UTF_8) + "\"");
 				updateNode(path, data);
 			} else {
 				throw e;
 			}
 		}
-		log.debug("Created znode: " + path);
 	}
 
 	/**
@@ -191,7 +197,7 @@ public class ZKSession {
 		List<String> children = null;
 		try {
 			children = zookeeper.getChildren(path, watcher);
-			log.debug("Got " + children.size() + " child(ren) for znode '" + path + "'");
+			log.trace("Got " + children.size() + " child(ren) for znode '" + path + "'");
 		} catch (KeeperException e) {
 			if (e.code() == Code.NONODE) {
 				log.warn("Cannot get children; missing znode '" + path + "'");
@@ -223,12 +229,15 @@ public class ZKSession {
 	 * znode for existence. In the case of a crash, the migration root znode is
 	 * deleted by the ECS.
 	 * 
-	 * @param server The server to check
+	 * @param transferrer A name of the node to check
 	 * @return <code>true</code> if the server's migration root znode exists,
 	 *         <code>false</code> otherwise
 	 */
-	public boolean checkServerAlive(IECSNode server) {
-		String migrationRootZnode = ZKPathUtil.getMigrationRootZnode(server);
+	public boolean checkSenderAlive(String transferrer) {
+		if (transferrer == null || transferrer.isEmpty()) return false;
+		if (transferrer.equals("ecs")) return true;
+
+		String migrationRootZnode = "/" + transferrer + "-migration";
 		try {
 			return zookeeper.exists(migrationRootZnode, null) != null;
 		} catch (KeeperException | InterruptedException e) {
@@ -259,7 +268,6 @@ public class ZKSession {
 	 * @throws InterruptedException If the transaction is interrupted
 	 */
 	public String getNodeData(String path, Watcher callback) throws KeeperException, InterruptedException {
-
 		Stat stat = zookeeper.exists(path, false);
 		if (stat == null) {
 			log.warn("No node found at path: " + path);
@@ -267,10 +275,11 @@ public class ZKSession {
 		}
 
 		Stat getDataStat = new Stat();
-		byte[] b = zookeeper.getData(path, callback, getDataStat);
-		log.trace(path + " stat: " + getDataStat.toString());
+		byte[] dataArr = zookeeper.getData(path, callback, getDataStat);
+		String dataStr = new String(dataArr, UTF_8);
 
-		return new String(b, UTF_8);
+		log.trace("Got data \"" + dataStr + "\" from znode " + path + " and set callback " + callback);
+		return dataStr;
 	}
 
 	/**
@@ -327,7 +336,7 @@ public class ZKSession {
 		if (stat != null) {
 			int version = stat.getVersion();
 			zookeeper.setData(path, data, version);
-			log.debug("Updated znode " + path + " with data \"" + new String(data) + "\"");
+			log.trace("Updated znode " + path + " with data \"" + new String(data) + "\"");
 		} else {
 			log.error("znode at " + path + " does not exist; could not update");
 		}
@@ -345,17 +354,30 @@ public class ZKSession {
 	}
 
 	/**
-	 * Deletes the specified znode.
+	 * Deletes the specified znode. Recursively deletes child nodes as well.
 	 * 
 	 * @param path The path of the znode to delete
 	 * @throws KeeperException If the ZooKeeper server signals an error
 	 * @throws InterruptedException If the transaction is interrupted
 	 */
 	public void deleteNode(String path) throws KeeperException, InterruptedException {
+		if (path.startsWith("/zookeeper")) return;
+
 		Stat stat = zookeeper.exists(path, false);
 		if (stat != null) {
-			int version = stat.getVersion();
-			zookeeper.delete(path, version);
+			List<String> children = zookeeper.getChildren(path, false);
+			for (String child : children) {
+				String childPath = (path.length() == 1 ? "" : path) + "/" + child;
+				deleteNode(childPath);
+			}
+
+			// delete everything except "/"
+			if (path.length() > 1) {
+				int version = stat.getVersion();
+				zookeeper.delete(path, version);
+				log.trace("Deleted znode " + path);
+			}
+
 		}
 
 	}
@@ -384,7 +406,7 @@ public class ZKSession {
 	 */
 	public String createMigrationZnode(String src, String target) throws KeeperException, InterruptedException {
 		String path = String.format("/%s-migration/%s", target, src);
-		createNode(path);
+		createNode(path, CreateMode.EPHEMERAL);
 		return path;
 	}
 }

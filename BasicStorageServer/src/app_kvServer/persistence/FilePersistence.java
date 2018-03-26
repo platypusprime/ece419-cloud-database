@@ -60,19 +60,19 @@ public class FilePersistence implements KVPersistence {
 	 * @param filename The file to load/store KV data
 	 */
 	public FilePersistence(String filename) {
-		log.info("Creating persistence manager for file: " + filename);
+		log.debug("Creating persistence manager for file: " + filename);
 		this.filename = filename;
 
 		// check to see that the file exists
 		File f = new File(filename);
 		if (!f.exists()) {
-			log.debug("Creating missing persistence file: " + filename);
+			log.trace("Creating missing persistence file: " + filename);
 			try {
 				f.getAbsoluteFile().getParentFile().mkdirs();
 				f.createNewFile();
 
 			} catch (IOException e) {
-				log.fatal("Could not create missing persistence file", e);
+				log.error("Could not create missing persistence file", e);
 				System.exit(1);
 			}
 		}
@@ -89,7 +89,7 @@ public class FilePersistence implements KVPersistence {
 			return false;
 
 		} catch (FileNotFoundException e) {
-			log.warn("Persistence file could not be found", e);
+			log.error("Persistence file could not be found", e);
 			return false;
 		}
 	}
@@ -108,7 +108,7 @@ public class FilePersistence implements KVPersistence {
 
 	@Override
 	public String get(String key) {
-		log.info("Looking up key '" + key + "' in persistence...");
+		log.trace("Looking up key '" + key + "' in persistence...");
 
 		try (Scanner scanner = new Scanner(new File(filename), UTF_8.name())) {
 			while (scanner.hasNextLine()) {
@@ -121,11 +121,11 @@ public class FilePersistence implements KVPersistence {
 				scanner.nextLine();
 			}
 
-			log.info("Value for key '" + key + "' not found");
+			log.trace("Value for key '" + key + "' not found");
 			return null;
 
 		} catch (FileNotFoundException e) {
-			log.warn("Persistence file could not be found", e);
+			log.error("Persistence file could not be found", e);
 			return null;
 		}
 	}
@@ -134,7 +134,7 @@ public class FilePersistence implements KVPersistence {
 	@Deprecated
 	public Map<String, String> getAll() {
 		Map<String, String> pairs = new HashMap<String, String>();
-		log.info("Loading all key values pairs from persistence...");
+		log.trace("Loading all key values pairs from persistence...");
 	
 		try (Scanner scanner = new Scanner(new File(filename), UTF_8.name())) {
 			while (scanner.hasNextLine()) {
@@ -146,7 +146,7 @@ public class FilePersistence implements KVPersistence {
 			}
 	
 		} catch (FileNotFoundException e) {
-			log.warn("Persistence file could not be found", e);
+			log.error("Persistence file could not be found", e);
 			return null;
 		}
 	
