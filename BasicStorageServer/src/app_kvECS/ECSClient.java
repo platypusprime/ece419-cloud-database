@@ -365,6 +365,57 @@ public class ECSClient implements IECSClient {
 		return true;
 	}
 
+	public synchronized boolean removeNodes(Collection<String> nodeNames, IECSNode failedNode) {
+		// update the topology object
+		Set<IECSNode> removedNodes = topology.removeNodesByName(nodeNames);
+		Set<IECSNode> successorNodes = topology.findSuccessors(removedNodes);
+
+		/* Removed nodes will know so because they will be unable to find themselves in
+		 * the updated metadata. Successor nodes will know so because they will be
+		 * unable to find their immediate predecessor(s) in the updated metadata */
+		try {
+			zkSession.updateMetadataNode(topology);
+		} catch (KeeperException | InterruptedException e) {
+			log.error("Could not update metadata znode data", e);
+		}
+
+		// await responses from both removed (transferrers) and successor (receiver)
+		// nodes
+		Set<IECSNode> changedNodes = Stream.concat(removedNodes.stream(), successorNodes.stream())
+				.collect(Collectors.toSet());
+
+		changedNodes.remove(failedNode);
+
+		boolean gotResponses = false;
+		try {
+			gotResponses = awaitNodes(changedNodes, SERVICE_RESIZE_TIMEOUT);
+		} catch (InterruptedException e) {
+			log.error("Interrupted while awaiting responses from " + changedNodes.size() + " nodes", e);
+			return false;
+		}
+		if (!gotResponses) {
+			log.error("Did not receive enough responses");
+		}
+
+		// signal shutdown to removed nodes
+		for (IECSNode removedNode : removedNodes) {
+			try {
+				zkSession.deleteNode(ZKPathUtil.getStatusZnode(removedNode));
+				zkSession.deleteNode(ZKPathUtil.getMigrationRootZnode(removedNode));
+				zkSession.deleteNode(ZKPathUtil.getReplicationRootZnode(removedNode));
+			} catch (KeeperException | InterruptedException e) {
+				log.error("Could not delete znode for node " + removedNode, e);
+			}
+		}
+
+		// remove heartbeat listeners for the removed nodes
+		for (String nodeName : nodeNames) {
+			Optional.ofNullable(heartbeatThreads.remove(nodeName)).ifPresent(Thread::interrupt);
+		}
+
+		return true;
+	}
+
 	@Override
 	public boolean awaitNodes(int count, int timeout) throws Exception {
 		return true;
