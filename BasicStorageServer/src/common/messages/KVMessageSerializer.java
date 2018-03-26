@@ -4,6 +4,7 @@ import static common.messages.KVMessage.KEY_ATTR;
 import static common.messages.KVMessage.RESPONSIBLE_NODE_ATTR;
 import static common.messages.KVMessage.STATUS_ATTR;
 import static common.messages.KVMessage.VALUE_ATTR;
+import static common.messages.StreamUtil.TYPE_ATTR;
 import static ecs.IECSNode.NODE_HOST_ATTR;
 import static ecs.IECSNode.NODE_NAME_ATTR;
 import static ecs.IECSNode.NODE_PORT_ATTR;
@@ -48,6 +49,8 @@ public class KVMessageSerializer implements JsonSerializer<KVMessage> {
 
 					messageObject.add(RESPONSIBLE_NODE_ATTR, serverObject);
 				});
+
+		messageObject.addProperty(TYPE_ATTR, KVMessage.class.getName());
 
 		return messageObject;
 	}

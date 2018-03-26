@@ -5,7 +5,7 @@ import app_kvServer.IKVServer.CacheStrategy;
 /**
  * Provides a contract for key-value cache systems.
  */
-public interface KVCacheManager {
+public interface KVCache {
 
 	/**
 	 * Returns the replacement strategy implemented by this cache.

@@ -14,7 +14,7 @@ import org.apache.log4j.PatternLayout;
 public class LogSetup {
 
 	/** The pattern string to set for the file appender. */
-	public static final String FILE_PATTERN = "[%d{ISO8601}][%-5p][%t][%c] %m%n";
+	public static final String FILE_PATTERN = "[%d{ISO8601}][%-5p][%t - %c] %m%n";
 
 	/**
 	 * Defeats instantiation.
@@ -47,15 +47,33 @@ public class LogSetup {
 	public static void initialize(String logdir, Level level, String consolePattern) throws IOException {
 		PatternLayout fileLayout = new PatternLayout(FILE_PATTERN);
 		FileAppender fileAppender = new FileAppender(fileLayout, logdir, true);
+		fileAppender.setName("file");
 
 		PatternLayout consoleLayout = new PatternLayout(consolePattern);
 		ConsoleAppender consoleAppender = new ConsoleAppender(consoleLayout);
+//		consoleAppender.setThreshold(Level.INFO);
+		consoleAppender.setName("stdout");
 
 		Logger rootLogger = Logger.getRootLogger();
-		rootLogger.removeAllAppenders();
+		rootLogger.removeAppender("stdout");
 		rootLogger.addAppender(consoleAppender);
+		rootLogger.removeAppender("file");
 		rootLogger.addAppender(fileAppender);
 		rootLogger.setLevel(level);
+		
+		// suppress logs from ZooKeeper library
+		Logger zkLogger = Logger.getLogger("org.apache.zookeeper");
+		zkLogger.setLevel(Level.WARN);
+	}
+
+	/**
+	 * Removes all appenders from the root logger and sets its log level to
+	 * <code>ERROR</code>.
+	 */
+	public static void teardown() {
+		Logger rootLogger = Logger.getRootLogger();
+		rootLogger.removeAllAppenders();
+		rootLogger.setLevel(Level.ERROR);
 	}
 
 }

@@ -9,28 +9,28 @@ import org.junit.Before;
 import org.junit.Test;
 
 import app_kvServer.IKVServer.CacheStrategy;
-import app_kvServer.cache.FifoCacheManager;
-import app_kvServer.cache.KVCacheManager;
+import app_kvServer.cache.FifoCache;
+import app_kvServer.cache.KVCache;
 
 /**
  * Tests various cache behaviors using the FIFO cache strategy implementation.
  */
-public class FifoCacheManagerTest {
+public class FifoCacheTest {
 
-	private KVCacheManager cache;
+	private KVCache cache;
 
 	/**
-	 * Sets up the cache manager with a size of 3 before each test.
+	 * Sets up the FIFO cache with a size of 3 before each test.
 	 */
 	@Before
 	public void setup() {
-		cache = new FifoCacheManager();
+		cache = new FifoCache();
 		cache.setCacheSize(3);
 	}
 
 	/**
 	 * Checks that the correct cache strategy is being returned by
-	 * {@link FifoCacheManager#getCacheStrategy() getCacheStrategy()}.
+	 * {@link FifoCache#getCacheStrategy() getCacheStrategy()}.
 	 */
 	@Test
 	public void testGetCacheStrategy() {
@@ -39,7 +39,7 @@ public class FifoCacheManagerTest {
 
 	/**
 	 * Checks that the correct cache capacity is being returned by
-	 * {@link FifoCacheManager#getCacheSize() getCacheSize()}.
+	 * {@link FifoCache#getCacheSize() getCacheSize()}.
 	 */
 	@Test
 	public void testGetCacheSize() {
@@ -129,7 +129,7 @@ public class FifoCacheManagerTest {
 	}
 
 	/**
-	 * Checks that the {@link FifoCacheManager#getCacheSize() setCacheSize()} method
+	 * Checks that the {@link FifoCache#getCacheSize() setCacheSize()} method
 	 * correctly rejects negative values.
 	 */
 	@Test(expected = IllegalArgumentException.class)

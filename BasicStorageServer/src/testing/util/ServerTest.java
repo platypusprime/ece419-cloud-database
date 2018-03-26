@@ -3,6 +3,7 @@ package testing.util;
 import java.io.IOException;
 
 import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 
@@ -20,10 +21,14 @@ public abstract class ServerTest {
 	/**
 	 * Initializes the server used for this test class and sets up logging.
 	 */
+	@SuppressWarnings("deprecation")
 	@BeforeClass
 	public static void serverSetup() {
 		try {
 			LogSetup.initialize("logs/testing/test.log", Level.ERROR);
+			// suppress console appender so ant task isn't flooded with logs
+			Logger.getRootLogger().removeAppender("stdout");
+
 			server = new KVServer(50000, 10, "FIFO");
 			server.clearCache();
 			server.clearStorage();

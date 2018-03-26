@@ -1,5 +1,7 @@
 package app_kvServer.migration;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -12,8 +14,9 @@ import org.apache.log4j.Logger;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
-import app_kvServer.persistence.KVPersistenceManager;
+import app_kvServer.persistence.KVPersistence;
 
+@Deprecated
 public class MigrationTask implements Runnable {
 	
 	public enum OpType {
@@ -30,7 +33,7 @@ public class MigrationTask implements Runnable {
 
 	private Socket socket;
 	
-	private KVPersistenceManager persistenceManager;
+	private KVPersistence persistenceManager;
 	
 	
 	/**
@@ -40,10 +43,8 @@ public class MigrationTask implements Runnable {
 	 * @param persistenceManager The KVPersistenceManager instance responsible for interacting
 	 *         with disk storage
 	 * @param type The type of the migration operation (i.e. send or receive)
-	 * 
-	 * @return An instance of MigrationTask initialized with the given arguments
 	 */
-	public MigrationTask(Socket socket, KVPersistenceManager persistenceManager, OpType type) {
+	public MigrationTask(Socket socket, KVPersistence persistenceManager, OpType type) {
 		this.type = type;
 		this.socket = socket;
 		this.persistenceManager = persistenceManager;
@@ -82,7 +83,7 @@ public class MigrationTask implements Runnable {
 			// Send back response
 			OutputStream out = socket.getOutputStream();
 			String responseStr = "MIGRATION_SUCCESSFUL" + '\n';
-			byte[] msgBytes = responseStr.getBytes("UTF-8");
+			byte[] msgBytes = responseStr.getBytes(UTF_8);
 
 			out.write(msgBytes, 0, msgBytes.length);
 			out.flush();
@@ -92,18 +93,18 @@ public class MigrationTask implements Runnable {
 			log.error("Could not receive data from source server", e);
 		}
 	}
-	
+
 	private void send() {
 		try {
 			OutputStream out = socket.getOutputStream();
-			Map<String, String> data = persistenceManager.getAll();
+			Map<String, String> data = null /* persistenceManager.getAll() */;
 			String msgStr = new Gson().toJson(data) + '\n';
-			byte[] msgBytes = msgStr.getBytes("UTF-8");
+			byte[] msgBytes = msgStr.getBytes(UTF_8);
 
 			out.write(msgBytes, 0, msgBytes.length);
 			out.flush();
 			log.info("Sent message: '" + msgStr.trim() + "'");
-			
+
 		} catch (IOException e) {
 			log.error("Could not send data to target server", e);
 			return;
@@ -114,7 +115,7 @@ public class MigrationTask implements Runnable {
 			InputStream in = socket.getInputStream();
 			String res = read(in);
 			log.info("Received message: '" + res.trim() + "'");
-			
+
 		} catch (IOException e) {
 			log.error("Could not get response from target server", e);
 		}
@@ -169,7 +170,7 @@ public class MigrationTask implements Runnable {
 		}
 
 		msgBytes = tmp;
-		String msgString = new String(msgBytes, "UTF-8");
+		String msgString = new String(msgBytes, UTF_8);
 		return msgString;
 	}
 	

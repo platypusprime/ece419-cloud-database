@@ -16,17 +16,17 @@ import java.util.Set;
  * keys and treats usages as new insertions. Chooses the oldest key for
  * eviction.
  */
-public class LruCacheManager extends AbstractCacheManager {
+public class LruCache extends AbstractCache {
 
-	private static Logger log = Logger.getLogger(KVCacheManager.class);
+	private static Logger log = Logger.getLogger(KVCache.class);
 
 	private Set<String> keys = new LinkedHashSet<>();
 
 	/**
 	 * Creates a LRU cache with an initial capacity of 0.
 	 */
-	public LruCacheManager() {
-		log.info("Created LRU cache manager");
+	public LruCache() {
+		log.info("Created LRU cache");
 	}
 
 	@Override

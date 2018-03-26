@@ -1,21 +1,10 @@
 package common.messages;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-
-import org.apache.log4j.Logger;
-
 /**
- * A naive implementation of a message which contains key, value, and status
- * information. Contains marshalling and unmarshalling functions.
+ * A simple implementation of a message containing key, value,
+ * and status information.
  */
 public class BasicKVMessage implements KVMessage {
-
-	private static final Logger log = Logger.getLogger(BasicKVMessage.class);
-
-	private static final int BUFFER_SIZE = 1024;
-	private static final int DROP_SIZE = 1024 * BUFFER_SIZE;
 
 	private final String key;
 	private final String value;
@@ -35,54 +24,6 @@ public class BasicKVMessage implements KVMessage {
 		this.status = status;
 	}
 
-	/**
-	 * Statically reconstructs a message from its marshalled string form.
-	 * 
-	 * @param msgString The string representation of a marshalled KV message
-	 * @return The unmarshalled message, or <code>null</code>
-	 *         if no message could be constructed
-	 */
-	public static BasicKVMessage fromString(String msgString) {
-		StatusType status = null;
-		String key = null, value = null;
-
-		String[] tokens = msgString.split("\\s+", 3);
-
-		if (tokens.length > 0 && tokens[0] != null) {
-			try {
-				status = StatusType.valueOf(tokens[0]);
-			} catch (IllegalArgumentException e) {
-				log.warn("Received invalid status type: " + tokens[0], e);
-			}
-		}
-
-		if (tokens.length > 1) {
-			key = tokens[1].trim();
-		}
-
-		if (tokens.length > 2) {
-			value = tokens[2].trim();
-		}
-
-		if (key == null && value == null && status == null) return null;
-		return new BasicKVMessage(key, value, status);
-	}
-
-	/**
-	 * Statically reconstructs a message from its marshalled byte array form.
-	 * 
-	 * @param bytes A byte array containing a marshalled KV message with
-	 *            UTF-8 encoding
-	 * @return The unmarshalled message, or <code>null</code>
-	 *         if no message could be constructed
-	 * @throws IOException If an IO exception occurs while decoding the byte array
-	 */
-	public static BasicKVMessage fromBytes(byte[] bytes) throws IOException {
-		String msgString = new String(bytes, "UTF-8");
-		log.debug("Building KV message from bytes: " + msgString);
-		return BasicKVMessage.fromString(msgString);
-	}
-
 	@Override
 	public String getKey() {
 		return key;
@@ -99,104 +40,13 @@ public class BasicKVMessage implements KVMessage {
 	}
 
 	@Override
-	public String toMessageString() {
-		if (status == null) {
-			log.warn("message status is null; cannot form message string");
-			return null;
-		}
-		StringBuilder msgBuilder = new StringBuilder();
-		msgBuilder.append(status.name());
-		if (key != null && !key.isEmpty()) {
-			msgBuilder.append(" ").append(key);
-		}
-		if (value != null && !value.isEmpty()) {
-			msgBuilder.append(" ").append(value);
-		}
+	public String toString() {
+		StringBuilder msgBuilder = new StringBuilder("BasicKVMessage{ ")
+				.append("status=\"").append(status == null ? "null" : status.name()).append("\" ")
+				.append("key=\"").append(key == null ? "null" : key).append("\" ")
+				.append("value=\"").append(value == null ? "null" : value).append("\" }");
 
-		return msgBuilder.append("\n").toString();
-	}
-
-	/**
-	 * Utility method that transmits a given message through the specified output
-	 * stream, using {@link BasicKVMessage#toMessageString() toMessageString()} to
-	 * marshal the message and UTF-8 to encode it.
-	 * 
-	 * @param out The stream on which to transmit the message
-	 * @param msg The message to transmit
-	 * @throws IOException If an IO exception occurs while encoding or
-	 *             transmitting the message
-	 */
-	public static void sendMessage(OutputStream out, KVMessage msg) throws IOException {
-		String msgStr = msg.toMessageString();
-		byte[] msgBytes = msgStr.getBytes("UTF-8");
-
-		out.write(msgBytes, 0, msgBytes.length);
-		out.flush();
-		log.info("Sent message: '" + msgStr.trim() + "'");
-	}
-
-	/**
-	 * Blocking call which waits for a full message to be transmitted from the
-	 * specified input stream and returns a parsed representation of it.
-	 * 
-	 * @param in The stream from which to receive the message
-	 * @return The received message, as a {@link KVMessage}
-	 * @throws IOException If the stream is closed before a full message could be
-	 *             received or if some other IO error occurs
-	 */
-	public static KVMessage receiveMessage(InputStream in) throws IOException {
-		log.debug("Waiting for message...");
-
-		int index = 0;
-		byte[] msgBytes = null, tmp = null;
-		byte[] bufferBytes = new byte[BUFFER_SIZE];
-
-		byte read;
-		boolean reading = true;
-		while ((read = (byte) in.read()) != -1 // EOS
-				&& read != 10  	// '\n'
-				&& read != 13 	// '\r'
-				&& reading) {
-			/* if buffer filled, copy to msg array */
-			if (index == BUFFER_SIZE) {
-				if (msgBytes == null) {
-					tmp = new byte[BUFFER_SIZE];
-					System.arraycopy(bufferBytes, 0, tmp, 0, BUFFER_SIZE);
-				} else {
-					tmp = new byte[msgBytes.length + BUFFER_SIZE];
-					System.arraycopy(msgBytes, 0, tmp, 0, msgBytes.length);
-					System.arraycopy(bufferBytes, 0, tmp, msgBytes.length, BUFFER_SIZE);
-				}
-
-				msgBytes = tmp;
-				bufferBytes = new byte[BUFFER_SIZE];
-				index = 0;
-			}
-
-			bufferBytes[index] = read;
-			index++;
-
-			/* stop reading is DROP_SIZE is reached */
-			if (msgBytes != null && msgBytes.length + index >= DROP_SIZE) {
-				reading = false;
-			}
-		}
-
-		if (msgBytes == null) {
-			tmp = new byte[index];
-			System.arraycopy(bufferBytes, 0, tmp, 0, index);
-		} else {
-			tmp = new byte[msgBytes.length + index];
-			System.arraycopy(msgBytes, 0, tmp, 0, msgBytes.length);
-			System.arraycopy(bufferBytes, 0, tmp, msgBytes.length, index);
-		}
-
-		msgBytes = tmp;
-
-		/* build final String */
-		KVMessage msg = BasicKVMessage.fromBytes(msgBytes);
-		log.info("Received message: '" + msg.toMessageString().trim() + "'");
-		return msg;
+		return msgBuilder.toString();
 	}
 
 }

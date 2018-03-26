@@ -8,29 +8,29 @@ import org.junit.Before;
 import org.junit.Test;
 
 import app_kvServer.IKVServer.CacheStrategy;
-import app_kvServer.cache.FifoCacheManager;
-import app_kvServer.cache.KVCacheManager;
-import app_kvServer.cache.LfuCacheManager;
+import app_kvServer.cache.FifoCache;
+import app_kvServer.cache.KVCache;
+import app_kvServer.cache.LfuCache;
 
 /**
  * Tests various cache behaviors using the LFU cache strategy implementation.
  */
-public class LfuCacheManagerTest {
+public class LfuCacheTest {
 
-	private KVCacheManager cache;
+	private KVCache cache;
 
 	/**
-	 * Sets up the cache manager with a size of 3 before each test.
+	 * Sets up the LFU cache with a size of 3 before each test.
 	 */
 	@Before
 	public void setup() {
-		cache = new LfuCacheManager();
+		cache = new LfuCache();
 		cache.setCacheSize(3);
 	}
 
 	/**
 	 * Checks that the correct cache strategy is being returned by
-	 * {@link LfuCacheManager#getCacheStrategy() getCacheStrategy()}.
+	 * {@link LfuCache#getCacheStrategy() getCacheStrategy()}.
 	 */
 	@Test
 	public void testGetCacheStrategy() {
@@ -39,7 +39,7 @@ public class LfuCacheManagerTest {
 
 	/**
 	 * Checks that the correct cache capacity is being returned by
-	 * {@link LfuCacheManager#getCacheSize() getCacheSize()}.
+	 * {@link LfuCache#getCacheSize() getCacheSize()}.
 	 */
 	@Test
 	public void testGetCacheSize() {
@@ -47,7 +47,7 @@ public class LfuCacheManagerTest {
 	}
 
 	/**
-	 * Checks for proper LRU cache eviction behavior. Inserts 3 KV pairs into a
+	 * Checks for proper LFU cache eviction behavior. Inserts 3 KV pairs into a
 	 * FIFO cache of size 3 and performs varying numbers of reads on those pairs.
 	 * Adds a fourth pair and expects the least-read pair to be evicted.
 	 */
@@ -142,7 +142,7 @@ public class LfuCacheManagerTest {
 	}
 
 	/**
-	 * Checks that the {@link FifoCacheManager#getCacheSize() setCacheSize()} method
+	 * Checks that the {@link FifoCache#getCacheSize() setCacheSize()} method
 	 * correctly rejects negative values.
 	 */
 	@Test(expected = IllegalArgumentException.class)

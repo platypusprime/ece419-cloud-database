@@ -18,6 +18,13 @@ public interface IKVServer {
 	};
 
 	/**
+	 * Get the name of the server.
+	 * 
+	 * @return The name
+	 */
+	public String getName();
+	
+	/**
 	 * Get the port number of the server
 	 * 
 	 * @return port number

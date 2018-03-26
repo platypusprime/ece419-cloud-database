@@ -6,7 +6,7 @@ import java.util.Map;
  * Provides the basic contract for classes which manipulate key-value based
  * persistences.
  */
-public interface KVPersistenceManager {
+public interface KVPersistence {
 
 	/**
 	 * Checks whether the persistence contains the given key.
@@ -27,6 +27,23 @@ public interface KVPersistenceManager {
 	public String get(String key);
 
 	/**
+	 * Retrieves all key-value pairs currently in the storage
+	 * 
+	 * @return Map of key-value pairs
+	 * @deprecated Use {@link #chunkator()} instead.
+	 */
+	@Deprecated
+	public Map<String, String> getAll();
+
+	/**
+	 * Retrieves a new chunk-based iterator for batch access to key-value pairs in
+	 * this persistence.
+	 * 
+	 * @return A new iterator
+	 */
+	public KVPersistenceChunkator chunkator();
+
+	/**
 	 * Inserts or updates the given key-value pair in the persistence.
 	 * 
 	 * @param key The key to set
@@ -37,23 +54,24 @@ public interface KVPersistenceManager {
 	public String put(String key, String value);
 
 	/**
-	 * Removes all key-value pairs from the persistence.
-	 */
-	public void clear();
-	
-	/**
-	 * Retrieves all key-value pairs currently in the storage
-	 * 
-	 * @return Map of key-value pairs
-	 */
-	public Map<String, String> getAll();
-	
-	/**
 	 * Inserts all key-value pairs from the given map into the persistent storage
 	 * 
+	 * @param pairs The pairs to insert
 	 * @return <code>true</code> if all keys were successfully added,
 	 *         <code>false</code> otherwise
 	 */
 	public boolean insertAll(Map<String, String> pairs);
+
+	/**
+	 * Removes all key-value pairs from the persistence.
+	 */
+	public void clear();
+
+	/**
+	 * Removes all key-value pairs in the given range from the persistence.
+	 * 
+	 * @param hashRange The key hash range to clear
+	 */
+	public void clearRange(String[] hashRange);
 
 }
