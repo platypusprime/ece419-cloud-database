@@ -28,6 +28,7 @@ import testing.ecs.ECSClientTest;
 		StreamUtilTest.class,
 		ECSNodeTest.class,
 		ZKWrapperTest.class,
-		ECSClientTest.class
+		ECSClientTest.class,
+		ReplicationTest.class
 })
 public class AllTests {}
