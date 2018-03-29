@@ -86,6 +86,10 @@ public class ZKPathUtil {
 		return getZnode(server, "replication");
 	}
 
+	public static String getReplicationZnode(IECSNode sender, IECSNode receiver) {
+		return getReplicationRootZnode(receiver) + "/" + sender.getNodeName();
+	}
+
 	/**
 	 * Returns the path for the znode which serves as a heartbeat indicator
 	 *

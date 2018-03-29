@@ -25,7 +25,7 @@ public class InteractionTest extends ServerTest {
 	 */
 	@Before
 	public void clientSetup() throws Exception {
-		kvClient = new KVStore("localhost", 50000);
+		kvClient = new KVStore("localhost", 60001);
 		kvClient.connect();
 	}
 

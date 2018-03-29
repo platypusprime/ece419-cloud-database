@@ -33,7 +33,7 @@ public class IllegalArgumentTest extends ServerTest {
 	 */
 	@Before
 	public void setUp() throws Exception {
-		client = new KVStore("localhost", 50000);
+		client = new KVStore("localhost", 60001);
 		client.connect();
 	}
 

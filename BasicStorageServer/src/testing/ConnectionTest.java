@@ -21,7 +21,7 @@ public class ConnectionTest extends ServerTest {
 	 */
 	@Test
 	public void testConnectionSuccess() throws Exception {
-		KVStore kvClient = new KVStore("localhost", 50000);
+		KVStore kvClient = new KVStore("localhost", 60001);
 		kvClient.connect();
 	}
 

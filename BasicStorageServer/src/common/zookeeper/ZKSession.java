@@ -387,4 +387,14 @@ public class ZKSession {
 		createNode(path);
 		return path;
 	}
+
+	public String createReplicationZnode(String src, String target) throws KeeperException, InterruptedException {
+		String path = getReplicationNodePath(src, target);
+		createNode(path);
+		return path;
+	}
+
+	public String getReplicationNodePath(String src, String target) {
+		return String.format("/%s-replication/%s", target, src);
+	}
 }
