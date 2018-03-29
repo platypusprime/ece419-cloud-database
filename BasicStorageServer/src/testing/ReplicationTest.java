@@ -41,4 +41,16 @@ public class ReplicationTest extends ServerTest {
         // Verify that the replica no longer contains the key
         assertNull(server2.getKV("K2"));
     }
+
+    @Test
+    public void testDuplicateInsert() throws InterruptedException {
+        server1.handlePutRequest("K3", "V3");
+        server1.handlePutRequest("K3", "V4");
+
+        // Wait for data to get replicated
+        Thread.sleep(KVServer.REPLICATION_CHECK_INTERVAL + 4 * 1000);
+        String val = server2.getKV("K3");
+
+        assertEquals("V4", val);
+    }
 }
