@@ -127,7 +127,8 @@ public class ClientConnection implements Runnable {
 			boolean valueEmpty = request.getValue() == null || request.getValue().isEmpty();
 			outValue = request.getValue();
 			try {
-				server.putKV(request.getKey(), request.getValue());
+				//server.putKV(request.getKey(), request.getValue());
+				server.handlePutRequest(request.getKey(), request.getValue());
 				if (keyExists && valueEmpty) {
 					outStatus = StatusType.DELETE_SUCCESS;
 				} else if (!keyExists && valueEmpty) {

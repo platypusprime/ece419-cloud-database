@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import app_kvServer.replication.ReplicationManager;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.zookeeper.KeeperException;
@@ -39,6 +40,9 @@ import common.zookeeper.ZKPathUtil;
 import common.zookeeper.ZKSession;
 import ecs.IECSNode;
 import logger.LogSetup;
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.server.ZKDatabase;
 
 /**
  * The implementation of server functionality defined in {@link IKVServer}.
@@ -49,12 +53,16 @@ public class KVServer implements IKVServer, Runnable {
 	private static final Logger log = Logger.getLogger(KVServer.class);
 
 	private static final String PERSISTENCE_FILENAME_FORMAT = "persistence/%s-data.txt";
+
+	private static final String UNREPLICATED_STORAGE_FILENAME_FORMAT = "persistence/%s-unreplicated.txt";
 	
 	private static final int HEARTBEAT_INTERVAL = 1000;
+	public static final int REPLICATION_CHECK_INTERVAL = 10 * 1000;
 
 	private final int port;
 	private final KVCache cache;
 	private final KVPersistence persistence;
+	private final KVPersistence unreplicated;
 
 	/** Contains values for possible server states. */
 	public static enum ServerStatus {
@@ -80,6 +88,7 @@ public class KVServer implements IKVServer, Runnable {
 	private KVServiceTopology serviceConfig;
 	private ServiceStatusWatcher serviceStatusWatcher = null;
 	private Thread heartbeatThread;
+	private Thread replicationThread;
 
 	/**
 	 * Main entry point for the key-value server application.
@@ -163,6 +172,10 @@ public class KVServer implements IKVServer, Runnable {
 			String persistenceFilename = String.format(PERSISTENCE_FILENAME_FORMAT, this.name);
 			this.persistence = new FilePersistence(persistenceFilename);
 
+			// set up temp storage for unreplicated data
+            String unreplicatedStorageName = String.format(UNREPLICATED_STORAGE_FILENAME_FORMAT, this.name);
+            this.unreplicated = new FilePersistence(unreplicatedStorageName);
+
 			log.info("Created KVServer with "
 					+ "port=" + port + ", "
 					+ "cacheSize=" + cacheSize + ", "
@@ -197,6 +210,10 @@ public class KVServer implements IKVServer, Runnable {
 		// set up storage
 		String storageIdentifier = "Server " + String.valueOf(port) + ".csv";
 		this.persistence = new FilePersistence(storageIdentifier);
+
+        // set up temp storage for unreplicated data
+        String unreplicatedStorageName = "Server " + String.valueOf(port) + " unreplicated.txt";
+        this.unreplicated = new FilePersistence(unreplicatedStorageName);
 
 		log.info("Created KVServer with "
 				+ "port=" + port + ", "
@@ -262,6 +279,12 @@ public class KVServer implements IKVServer, Runnable {
 
 		// Check if there is any initial data that needs to be transferred in
 		completeInitialMigration();
+
+		// Initialize listener for replicated data
+		readReplicationNode();
+
+		// Initialize replication thread
+		initializeReplication();
 
 		// main accept loop
 		while (!serverSocket.isClosed()) {
@@ -456,11 +479,24 @@ public class KVServer implements IKVServer, Runnable {
 	}
 
 	@Override
-	public synchronized String getKV(String key) throws Exception {
+	public synchronized String getKV(String key) {
 		return Optional.ofNullable(cache)
 				.map(cm -> cm.get(key))
 				.orElseGet(() -> persistence.get(key));
 	}
+
+
+    public synchronized void handlePutRequest(String key, String value) {
+	    putKV(key, value);
+	    putKVInUnreplicatedList(key, value);
+    }
+
+    private synchronized void putKVInUnreplicatedList(String key, String value) {
+	    if (value == null) {
+	        value = " "; // Use string with a single space to denote that the key has been deleted
+        }
+        this.unreplicated.put(key, value);
+    }
 
 	@Override
 	public synchronized void putKV(String key, String value) {
@@ -482,6 +518,7 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public synchronized void clearStorage() {
+		unreplicated.clear();
 		persistence.clear();
 	}
 
@@ -492,11 +529,21 @@ public class KVServer implements IKVServer, Runnable {
 
 	@Override
 	public void close() {
-		try {
-			serverSocket.close(); // causes a SocketException, triggering run()'s epilogue
-		} catch (IOException e) {
-			log.error("Unable to close server socket", e);
-		}
+		kill();
+//		try {
+//			serverSocket.close(); // causes a SocketException, triggering run()'s epilogue
+//		} catch (IOException e) {
+//			log.error("Unable to close server socket", e);
+//		}
+	}
+
+	public void die() throws IOException {
+		serverSocket.close();
+//		for (ClientConnection c: clients) {
+//			c.close();
+//		}
+//		this.heartbeatThread.stop();
+//		this.replicationThread.stop();
 	}
 
 	@Override
@@ -626,6 +673,79 @@ public class KVServer implements IKVServer, Runnable {
 		} else {
 			log.debug("Server " + name + " no longer exists in the topology");
 		}
+	}
+
+	private void readReplicationNode() {
+		String nodePath = ZKPathUtil.getReplicationRootZnode(config);
+		List<String> childNodes = zkSession.getChildNodes(nodePath, new Watcher() {
+			@Override
+			public void process(WatchedEvent watchedEvent) {
+				if (watchedEvent.getType() == Event.EventType.NodeChildrenChanged) {
+					readReplicationNode();
+				}
+			}
+		});
+
+		if (childNodes == null) {
+			log.warn("Child nodes for " + nodePath + " is NULL");
+			return;
+		}
+
+		// Receive migrated data from other servers
+		ReplicationManager.receiveData(childNodes, zkSession, this);
+	}
+
+
+	private void initializeReplication() {
+		this.replicationThread = new Thread() {
+			public void run() {
+				while (!isInterrupted()) {
+					try {
+						// TODO: if (topology change not in progress)
+						Map<String, String> data = unreplicated.getAndRemoveAll();
+						if (!data.isEmpty()) {
+							KVServiceTopology topology = getServiceConfig();
+
+							IECSNode replica1 = topology.findSuccessor(config.getNodeHashRangeStart());
+							IECSNode replica2 = topology.findSuccessor(replica1.getNodeHashRangeStart());
+
+							IECSNode[] replicas = {replica1, replica2};
+							for (IECSNode r : replicas) {
+								if (r.getNodeName().equals(config.getNodeName()))
+									continue;
+
+								try {
+									log.info("Replicating data to " + r.getNodeName());
+									String replicationNodePath = ZKPathUtil.getReplicationZnode(config, r);
+									if (!zkSession.checkNodeExists(replicationNodePath, null)) {
+										zkSession.createReplicationZnode(name, r.getNodeName());
+									}
+
+									MigrationMessage message = new MigrationMessage(data);
+									zkSession.updateNode(replicationNodePath, message.toJSON());
+
+									String response = zkSession.getNodeData(replicationNodePath);
+									while (response == null || !response.equals("RECEIVED")) { // Busy wait till data is received by replica
+										response = zkSession.getNodeData(replicationNodePath);
+									}
+
+									log.info("Successfully replicated data to " + r.getNodeName());
+									zkSession.deleteNode(replicationNodePath);
+
+								} catch (KeeperException e) {
+									log.error("Error while replicating data", e);
+								}
+							}
+						}
+
+						Thread.sleep(REPLICATION_CHECK_INTERVAL);
+					} catch (InterruptedException e) {
+						log.warn("Exception while checking for unreplicated data", e);
+					}
+				}
+			}
+		};
+		replicationThread.start();
 	}
 
 }

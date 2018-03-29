@@ -35,6 +35,8 @@ public interface KVPersistence {
 	@Deprecated
 	public Map<String, String> getAll();
 
+	public Map<String, String> getAndRemoveAll();
+
 	/**
 	 * Retrieves a new chunk-based iterator for batch access to key-value pairs in
 	 * this persistence.

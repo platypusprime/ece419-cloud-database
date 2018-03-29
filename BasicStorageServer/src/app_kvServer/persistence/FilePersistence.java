@@ -154,6 +154,24 @@ public class FilePersistence implements KVPersistence {
 	}
 
 	@Override
+	public synchronized Map<String, String> getAndRemoveAll() {
+		Map<String, String> pairs = getAll();
+		deleteAll();
+
+		return pairs;
+	}
+
+	private void deleteAll() {
+		try {
+			RandomAccessFile r = new RandomAccessFile(filename, "rw");
+			r.setLength(0);
+			r.close();
+		} catch (IOException e) {
+			log.error("I/O exception while writing to persistence file: " + filename, e);
+		}
+	}
+
+	@Override
 	public KVPersistenceChunkator chunkator() {
 		try {
 			return new FilePersistenceChunkator(filename);
